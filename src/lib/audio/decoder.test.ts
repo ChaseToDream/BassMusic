@@ -119,6 +119,9 @@ describe('getAudioMeta', () => {
 /** 模块动态引用类型。 */
 type DecoderModule = typeof import('./decoder')
 
+/** context 模块动态引用类型。 */
+type ContextModule = typeof import('./context')
+
 /** 构造带 arrayBuffer 方法的 File 桩，供 decodeAudioFile 使用。 */
 function makeDecodableFile(name = 'test.mp3', bytes = new ArrayBuffer(8)): File {
   return {
@@ -148,12 +151,12 @@ function stubAudioContext(decodeAudioData: (...args: any[]) => unknown): {
 }
 
 describe('getAudioContext', () => {
-  let decoder: DecoderModule
+  let context: ContextModule
 
   beforeEach(async () => {
     // 重置模块以重置内部单例，确保每个用例从全新状态开始
     vi.resetModules()
-    decoder = await import('./decoder')
+    context = await import('./context')
   })
 
   afterEach(() => {
@@ -163,8 +166,8 @@ describe('getAudioContext', () => {
   it('首次调用创建实例，后续返回同一实例', () => {
     const { mockCtor } = stubAudioContext(vi.fn(() => Promise.resolve(makeBufferStub())))
 
-    const ctx1 = decoder.getAudioContext()
-    const ctx2 = decoder.getAudioContext()
+    const ctx1 = context.getAudioContext()
+    const ctx2 = context.getAudioContext()
 
     expect(ctx1).toBe(ctx2)
     expect(mockCtor).toHaveBeenCalledTimes(1)

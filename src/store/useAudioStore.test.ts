@@ -10,7 +10,7 @@
  * - togglePreviewMode 在 'original' 与 'processed' 之间切换
  * - toggleHighContrast 在 true/false 间切换
  */
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
 import { useAudioStore } from './useAudioStore'
 import { applyPreset as applyPresetParams } from '@/lib/presets'
@@ -89,8 +89,14 @@ describe('useAudioStore 初始状态', () => {
 
 describe('useAudioStore actions', () => {
   beforeEach(() => {
+    // 使用假定时器以可控地推进预设反查防抖（PRESET_DETECT_DELAY=100ms）
+    vi.useFakeTimers()
     // 每个用例前重置为初始数据状态，避免状态污染
     useAudioStore.setState(getInitialState())
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('setAudioFile 后状态更新', () => {
@@ -108,17 +114,22 @@ describe('useAudioStore actions', () => {
     expect(state.audioMeta).toEqual(meta)
   })
 
-  it('updateLowShelf 后 presetType 自动切换为 custom', () => {
+  it('updateLowShelf 后 presetType 防抖后切换为 custom', () => {
     // 先应用 moderate 预设，使 presetType 偏离初始的 custom
     useAudioStore.getState().applyPreset('moderate')
     expect(useAudioStore.getState().presetType).toBe('moderate')
 
     // 修改 lowShelf.gain 使其不再匹配任何预设（moderate 的 gain 为 9）
     useAudioStore.getState().updateLowShelf({ gain: 7 })
+    // params 立即更新
     const state = useAudioStore.getState()
     expect(state.params.lowShelf.gain).toBe(7)
     expect(state.params.lowShelf.frequency).toBe(80)
-    expect(state.presetType).toBe('custom')
+    // presetType 经防抖延迟后才反查，更新前仍为 moderate
+    expect(useAudioStore.getState().presetType).toBe('moderate')
+    // 推进防抖定时器，触发反查
+    vi.advanceTimersByTime(100)
+    expect(useAudioStore.getState().presetType).toBe('custom')
   })
 
   it("applyPreset('moderate') 后 params 与 presetType 都更新", () => {
@@ -142,7 +153,8 @@ describe('useAudioStore actions', () => {
     for (let i = 1; i < eq.length; i++) {
       expect(eq[i].gain).toBe(originalGains[i])
     }
-    // 修改后不再匹配默认参数，预设切换为 custom
+    // 推进防抖定时器触发反查；修改后不再匹配默认参数，预设切换为 custom
+    vi.advanceTimersByTime(100)
     expect(useAudioStore.getState().presetType).toBe('custom')
   })
 

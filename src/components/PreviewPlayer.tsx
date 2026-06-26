@@ -1,10 +1,11 @@
 import { Pause, Play, Repeat, Square } from 'lucide-react'
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect } from 'react'
 
 import { Slider } from '@/components/ui/Slider'
 import WaveformViewer from '@/components/WaveformViewer'
+import { getAudioContext } from '@/lib/audio/context'
+import { getAudioProcessor } from '@/lib/audio/processor'
 import type { AudioProcessParams } from '@/lib/types'
-import { AudioProcessor, getAudioContext } from '@/lib/audio/processor'
 import { cn } from '@/lib/utils'
 import { useAudioStore } from '@/store/useAudioStore'
 
@@ -48,13 +49,8 @@ export default function PreviewPlayer() {
   const setCurrentTime = useAudioStore((s) => s.setCurrentTime)
   const togglePreviewMode = useAudioStore((s) => s.togglePreviewMode)
 
-  // 懒初始化 AudioProcessor 单例（基于全局共享 AudioContext）
-  const processorRef = useRef<AudioProcessor | null>(null)
-  if (processorRef.current === null) {
-    const ctx = getAudioContext()
-    processorRef.current = new AudioProcessor(ctx)
-  }
-  const processor = processorRef.current
+  // 使用全局共享的 AudioProcessor 单例（基于共享 AudioContext）
+  const processor = getAudioProcessor()
 
   const duration = audioMeta?.duration ?? processor.getDuration()
 

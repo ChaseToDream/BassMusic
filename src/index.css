@@ -1,0 +1,155 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===== 基础全局样式 ===== */
+:root {
+  /* 高对比度深色配色（面向听障用户增强可读性） */
+  color-scheme: dark;
+  --bass-bg: #0b1020;
+  --bass-text: #e8ecf5;
+  --accent: #facc15;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bass-bg);
+  color: var(--bass-text);
+  /* 系统字体栈，兼容中英文 */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, 'Noto Sans', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', '微软雅黑', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* 焦点轮廓：确保键盘导航时焦点可见（无障碍） */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* 滚动条（深色主题适配） */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #243049;
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #2f3f5e;
+}
+
+/* 表单控件基础重置 */
+button {
+  font-family: inherit;
+}
+
+/* ===== 自定义滑块（bass-range）=====
+   跨浏览器一致的深色主题滑块外观：
+   - Webkit：轨道透明，露出 input 内联渐变背景实现进度填充；
+   - Firefox：::-moz-range-progress 实现进度填充。 */
+.bass-range {
+  -webkit-appearance: none;
+  appearance: none;
+  accent-color: var(--accent, #facc15);
+  background-color: transparent;
+}
+
+.bass-range::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 9999px;
+  background: transparent;
+}
+
+.bass-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -4px;
+  height: 16px;
+  width: 16px;
+  border-radius: 9999px;
+  background: #facc15;
+  border: 2px solid #0b1020;
+  cursor: pointer;
+}
+
+.bass-range::-moz-range-track {
+  height: 8px;
+  border-radius: 9999px;
+  background: #243049;
+}
+
+.bass-range::-moz-range-progress {
+  height: 8px;
+  border-radius: 9999px;
+  background: var(--accent, #facc15);
+}
+
+.bass-range::-moz-range-thumb {
+  height: 16px;
+  width: 16px;
+  border-radius: 9999px;
+  background: #facc15;
+  border: 2px solid #0b1020;
+  cursor: pointer;
+}
+
+.bass-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.35);
+}
+
+.bass-range:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.35);
+}
+
+.bass-range:disabled::-webkit-slider-thumb {
+  cursor: not-allowed;
+}
+
+.bass-range:disabled::-moz-range-thumb {
+  cursor: not-allowed;
+}
+
+/* ===== 高对比度模式覆盖 =====
+   当根容器添加 .high-contrast 类时，强制使用纯黑/纯白高对比配色，
+   提升弱视用户的可读性。仅覆盖主题语义类名，保留布局与圆角。 */
+.high-contrast {
+  --tw-prose-body: #ffffff;
+}
+
+.high-contrast .bg-bass-bg {
+  background-color: #000000 !important;
+}
+
+.high-contrast .bg-bass-surface {
+  background-color: #0a0a0a !important;
+}
+
+.high-contrast .text-bass-text {
+  color: #ffffff !important;
+}
+
+.high-contrast .text-bass-muted {
+  color: #d0d0d0 !important;
+}
+
+.high-contrast .border-bass-border {
+  border-color: #ffffff !important;
+}

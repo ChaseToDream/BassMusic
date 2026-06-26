@@ -46,6 +46,18 @@ const A11Y_FEATURES: string[] = [
   '波形与进度支持键盘跳转与方向键调节',
 ]
 
+/** 键盘快捷键条目：按键与说明。 */
+const SHORTCUTS: Array<{ keys: string; desc: string }> = [
+  { keys: 'Space', desc: '播放 / 暂停' },
+  { keys: 'S', desc: '停止' },
+  { keys: '← / →', desc: '后退 / 前进 1 秒（按住 Shift 为 5 秒）' },
+  { keys: 'B', desc: '切换原始 / 处理后预览' },
+  { keys: 'C', desc: '切换高对比度模式' },
+  { keys: 'H', desc: '打开帮助' },
+  { keys: 'E', desc: '打开导出对话框' },
+  { keys: 'Esc', desc: '关闭对话框' },
+]
+
 /**
  * 帮助对话框。
  * 仅当 store 中 isHelpDialogOpen 为 true 时渲染。
@@ -150,6 +162,26 @@ export default function HelpDialog() {
                 </li>
               ))}
             </ul>
+          </section>
+
+          {/* 键盘快捷键 */}
+          <section>
+            <h3 className="font-medium text-bass-text">键盘快捷键</h3>
+            <dl className="mt-2 space-y-1.5">
+              {SHORTCUTS.map((item) => (
+                <div
+                  key={item.keys}
+                  className="flex items-center justify-between gap-3 text-xs"
+                >
+                  <dt className="text-bass-muted">{item.desc}</dt>
+                  <dd>
+                    <kbd className="rounded border border-bass-border bg-bass-bg px-1.5 py-0.5 font-mono text-[10px] text-bass-text">
+                      {item.keys}
+                    </kbd>
+                  </dd>
+                </div>
+              ))}
+            </dl>
           </section>
         </div>
 

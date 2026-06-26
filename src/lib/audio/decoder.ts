@@ -2,8 +2,9 @@
  * 音频解码模块。
  *
  * 使用 AudioContext.decodeAudioData 解码上传的音频文件，返回 AudioBuffer，
- * 并提供文件校验、AudioContext 单例管理与元信息提取能力。
+ * 并提供文件校验与元信息提取能力。AudioContext 单例由 context.ts 统一管理。
  */
+import { getAudioContext } from './context'
 import type { AudioFileMeta } from '../types'
 
 /** 支持的音频文件扩展名（小写形式）。 */
@@ -14,31 +15,6 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024
 
 /** 解码失败时抛出的中文错误信息。 */
 const DECODE_ERROR_MESSAGE = '音频文件解码失败，可能已损坏或编码不支持'
-
-/** 单例 AudioContext，避免重复创建带来性能开销。 */
-let audioContextInstance: AudioContext | null = null
-
-/**
- * 获取单例 AudioContext。
- *
- * 首次调用时通过 `new (window.AudioContext || window.webkitAudioContext)()` 创建实例，
- * 后续调用返回同一实例。AudioContext 创建与销毁成本较高，全局复用一份即可。
- * @returns 全局唯一的 AudioContext 实例
- */
-export function getAudioContext(): AudioContext {
-  if (!audioContextInstance) {
-    const w = window as unknown as {
-      AudioContext?: typeof AudioContext
-      webkitAudioContext?: typeof AudioContext
-    }
-    const Ctor = w.AudioContext ?? w.webkitAudioContext
-    if (!Ctor) {
-      throw new Error('当前环境不支持 Web Audio API')
-    }
-    audioContextInstance = new Ctor()
-  }
-  return audioContextInstance
-}
 
 /**
  * 校验音频文件是否合法。

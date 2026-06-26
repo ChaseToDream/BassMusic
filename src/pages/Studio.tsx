@@ -20,6 +20,7 @@ import HelpDialog from '@/components/HelpDialog'
 import LowShelfPanel from '@/components/LowShelfPanel'
 import PreviewPlayer from '@/components/PreviewPlayer'
 import PresetSelector from '@/components/PresetSelector'
+import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts'
 import { useAudioStore } from '@/store/useAudioStore'
 import { cn } from '@/lib/utils'
 
@@ -41,6 +42,9 @@ export function Studio() {
   const toggleHighContrast = useAudioStore((s) => s.toggleHighContrast)
   const setHelpDialogOpen = useAudioStore((s) => s.setHelpDialogOpen)
   const setExportDialogOpen = useAudioStore((s) => s.setExportDialogOpen)
+
+  // 注册全局键盘快捷键（播放、跳转、A/B、高对比度、帮助、导出）
+  useGlobalShortcuts()
 
   const hasBuffer = Boolean(audioBuffer)
 

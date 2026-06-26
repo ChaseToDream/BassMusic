@@ -8,6 +8,7 @@
  * 同时导出共享的 `buildProcessingChain`，供离线渲染（exporter）复用，
  * 保证实时处理与离线导出的音频处理参数完全一致。
  */
+import { getAudioContext } from './context'
 import { DEFAULT_AUDIO_PROCESS_PARAMS } from '../types'
 import type {
   AudioProcessParams,
@@ -149,25 +150,21 @@ export function buildProcessingChain(
   return chain
 }
 
-let sharedAudioContext: AudioContext | null = null
+/** 全局共享的 AudioProcessor 单例，供 PreviewPlayer 与全局快捷键复用。 */
+let sharedProcessor: AudioProcessor | null = null
 
 /**
- * 获取（必要时创建）全局共享的 AudioContext 单例。
+ * 获取（必要时创建）全局共享的 AudioProcessor 单例。
  *
- * 浏览器策略要求 AudioContext 在用户交互后才能恢复播放，
- * 此工厂仅负责懒创建实例，resume 时机由调用方决定。
- * 与 decoder.ts 中的工厂相互独立，避免循环依赖。
+ * 基于 `getAudioContext()` 提供的共享 AudioContext 创建，确保实时处理链
+ * 与解码共用同一 AudioContext。供 PreviewPlayer 与全局快捷键等调用方复用，
+ * 避免多处各自创建实例导致状态不一致。
  */
-export function getAudioContext(): AudioContext {
-  if (!sharedAudioContext) {
-    const w = window as unknown as {
-      AudioContext?: typeof AudioContext
-      webkitAudioContext?: typeof AudioContext
-    }
-    const Ctor = w.AudioContext ?? w.webkitAudioContext ?? AudioContext
-    sharedAudioContext = new Ctor()
+export function getAudioProcessor(): AudioProcessor {
+  if (!sharedProcessor) {
+    sharedProcessor = new AudioProcessor(getAudioContext())
   }
-  return sharedAudioContext
+  return sharedProcessor
 }
 
 /**

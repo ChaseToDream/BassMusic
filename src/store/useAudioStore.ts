@@ -2,8 +2,13 @@
  * 全局音频状态管理（zustand）。
  *
  * 持有音频数据、处理参数、预设、播放、上传、导出与 UI 状态，
- * 并提供不可变更新 actions。每次参数更新后自动调用 detectPresetFromParams
+ * 并提供不可变更新 actions。每次参数更新后通过防抖调度 detectPresetFromParams
  * 反查当前所属预设；若不匹配任何具体预设，则将 presetType 置为 'custom'。
+ *
+ * 防抖说明：拖动滑块等连续参数更新会高频触发，预设反查本身需对 5 个预设
+ * 做全量比较，开销不可忽略。通过 PRESET_DETECT_DELAY 防抖合并连续更新，
+ * 仅在交互停顿后反查一次，避免拖动过程中每帧都执行 stringify 比较。
+ * applyPreset 为整体替换，presetType 由调用方直接指定，无需防抖。
  */
 import { create } from 'zustand'
 
@@ -20,6 +25,40 @@ import {
   type PreviewMode,
   type PresetType,
 } from '@/lib/types'
+
+/** 预设反查防抖延迟（毫秒）。拖动滑块等连续更新的停顿后触发一次反查。 */
+const PRESET_DETECT_DELAY = 100
+
+/** 待执行的预设反查定时器句柄。 */
+let presetDetectTimer: ReturnType<typeof setTimeout> | null = null
+
+/**
+ * 调度一次防抖的预设反查。
+ *
+ * 取消尚未触发的旧定时器，并在 PRESET_DETECT_DELAY 毫秒后读取最新 params
+ * 进行反查。连续调用会不断推迟触发，最终只在最后一次更新后执行一次。
+ */
+function schedulePresetDetect(): void {
+  if (presetDetectTimer !== null) {
+    clearTimeout(presetDetectTimer)
+  }
+  presetDetectTimer = setTimeout(() => {
+    presetDetectTimer = null
+    const params = useAudioStore.getState().params
+    useAudioStore.setState({ presetType: detectPresetFromParams(params) })
+  }, PRESET_DETECT_DELAY)
+}
+
+/**
+ * 取消尚未触发的预设反查定时器。
+ * 在 applyPreset 等直接指定 presetType 的操作前调用，避免迟到的反查覆盖显式设置的值。
+ */
+function cancelPresetDetect(): void {
+  if (presetDetectTimer !== null) {
+    clearTimeout(presetDetectTimer)
+    presetDetectTimer = null
+  }
+}
 
 /**
  * 深拷贝音频处理参数，确保 store 内部状态与外部传入对象互不共享引用。
@@ -156,14 +195,15 @@ export const useAudioStore = create<AudioStore>((set) => ({
   setLoadError: (loadError) => set({ loadError }),
   clearAudioFile: () => set({ audioBuffer: null, audioMeta: null }),
 
-  // ---- 参数更新（每次更新后自动反查预设） ----
+  // ---- 参数更新（每次更新后防抖反查预设） ----
   updateLowShelf: (partial) =>
     set((state) => {
       const params: AudioProcessParams = {
         ...state.params,
         lowShelf: { ...state.params.lowShelf, ...partial },
       }
-      return { params, presetType: detectPresetFromParams(params) }
+      schedulePresetDetect()
+      return { params }
     }),
 
   updateEqualizerBand: (index, band) =>
@@ -172,7 +212,8 @@ export const useAudioStore = create<AudioStore>((set) => ({
         i === index ? { ...current, ...band } : { ...current },
       )
       const params: AudioProcessParams = { ...state.params, equalizer }
-      return { params, presetType: detectPresetFromParams(params) }
+      schedulePresetDetect()
+      return { params }
     }),
 
   updateEqualizerBands: (bands) =>
@@ -181,7 +222,8 @@ export const useAudioStore = create<AudioStore>((set) => ({
         ...state.params,
         equalizer: bands.map((band) => ({ ...band })),
       }
-      return { params, presetType: detectPresetFromParams(params) }
+      schedulePresetDetect()
+      return { params }
     }),
 
   updateCompressor: (partial) =>
@@ -190,27 +232,34 @@ export const useAudioStore = create<AudioStore>((set) => ({
         ...state.params,
         compressor: { ...state.params.compressor, ...partial },
       }
-      return { params, presetType: detectPresetFromParams(params) }
+      schedulePresetDetect()
+      return { params }
     }),
 
   updateParams: (nextParams) =>
     set(() => {
       const params = cloneParams(nextParams)
-      return { params, presetType: detectPresetFromParams(params) }
+      schedulePresetDetect()
+      return { params }
     }),
 
   resetParams: () =>
     set(() => {
       const params = cloneParams(DEFAULT_AUDIO_PROCESS_PARAMS)
-      return { params, presetType: detectPresetFromParams(params) }
+      // 重置为默认参数，presetType 必然为 'custom'，直接指定并取消待触发的反查。
+      cancelPresetDetect()
+      return { params, presetType: 'custom' }
     }),
 
   // ---- 预设 ----
-  applyPreset: (preset) =>
+  applyPreset: (preset) => {
+    // 整体替换参数并直接指定 presetType，取消待触发的防抖反查避免覆盖。
+    cancelPresetDetect()
     set(() => ({
       params: applyPresetParams(preset),
       presetType: preset,
-    })),
+    }))
+  },
 
   // ---- 播放 ----
   setPlayState: (playState) => set({ playState }),

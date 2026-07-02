@@ -11,6 +11,9 @@
  */
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 
+import { FOCUS_RING } from '@/lib/styles'
+import { logger } from '@/lib/logger'
+
 interface ErrorBoundaryProps {
   /** 被包裹的子树。 */
   children: ReactNode
@@ -41,8 +44,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
    * 错误边界生命周期：记录错误信息，便于后续排查。
    */
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    // 控制台输出错误与组件堆栈，生产环境可在此接入日志上报
-    console.error('BassMusic 渲染错误：', error, info.componentStack)
+    logger.error('渲染错误：', error, info.componentStack)
   }
 
   /**
@@ -82,7 +84,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           <button
             type="button"
             onClick={this.handleReload}
-            className="mt-6 inline-flex items-center justify-center rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-bass-bg hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bass-bg"
+            className={`mt-6 inline-flex items-center justify-center rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-bass-bg hover:bg-accent-hover ${FOCUS_RING}`}
           >
             重新加载
           </button>

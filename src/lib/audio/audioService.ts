@@ -1,38 +1,47 @@
 /**
  * 音频服务层。
  *
- * 作为 AudioProcessor 与全局 store 之间的唯一代理，统一封装播放控制、
- * 参数更新与状态同步。UI 组件与快捷键只调用此服务，不再直接操作 processor。
+ * 作为 AudioProcessor 与上层（UI / hooks）之间的唯一代理，统一封装播放控制
+ * 与参数更新。本服务是纯命令式 API，不直接读写任何 store：
+ *
+ * - 调用方（PreviewPlayer / useGlobalShortcuts）负责在调用后同步 store 状态；
+ * - 播放结束事件通过 onEnded 回调通知调用方，由调用方更新 store。
+ *
+ * 这样设计消除了原先 audioService ↔ store 的双向依赖回环，使数据流
+ * 退化为单向：UI → audioService → 底层引擎，store 由 UI 统一维护。
  *
  * 采用懒初始化策略：首次使用时才创建 AudioProcessor，避免模块加载时
  * 过早实例化 AudioContext（可能违反浏览器用户手势策略）。
  */
-import { useAudioStore } from '@/store/useAudioStore'
-
 import type { AudioProcessParams } from '../types'
 import { getAudioContext } from './context'
-import { getAudioProcessor } from './processor'
+import { type AudioProcessor, getAudioProcessor } from './processor'
 
 class AudioService {
-  private processor_: ReturnType<typeof getAudioProcessor> | null = null
+  private processor_: AudioProcessor | null = null
+
+  /**
+   * 播放结束回调。
+   *
+   * 由上层（PreviewPlayer）设置，在底层 AudioProcessor 触发 onEnded 时
+   * 被调用。audioService 不在此处直接写 store，交由调用方决定如何同步状态。
+   */
+  onEnded: (() => void) | null = null
 
   /** 获取或初始化底层 AudioProcessor 单例。 */
   private get processor() {
     if (!this.processor_) {
       this.processor_ = getAudioProcessor()
       this.processor_.onEnded = () => {
-        useAudioStore.getState().setPlayState('stopped')
-        useAudioStore.getState().setCurrentTime(0)
+        this.onEnded?.()
       }
     }
     return this.processor_
   }
 
-  /** 设置待播放缓冲，并重置播放状态到起始位置。 */
+  /** 设置待播放缓冲。仅操作底层引擎，不写任何外部状态。 */
   setBuffer(buffer: AudioBuffer): void {
     this.processor.setBuffer(buffer)
-    useAudioStore.getState().setCurrentTime(0)
-    useAudioStore.getState().setPlayState('stopped')
   }
 
   /** 从指定位置开始播放。 */
@@ -42,27 +51,23 @@ class AudioService {
       void ctx.resume()
     }
     this.processor.play(offsetSeconds)
-    useAudioStore.getState().setPlayState('playing')
   }
 
-  /** 暂停播放。 */
-  pause(): void {
+  /** 暂停播放。返回暂停时刻的播放位置（秒），供调用方同步 store。 */
+  pause(): number {
     this.processor.pause()
-    useAudioStore.getState().setPlayState('paused')
-    useAudioStore.getState().setCurrentTime(this.processor.getCurrentTime())
+    return this.processor.getCurrentTime()
   }
 
-  /** 停止播放。 */
+  /** 停止播放。调用方负责将 store 的 playState/currentTime 重置。 */
   stop(): void {
     this.processor.stop()
-    useAudioStore.getState().setPlayState('stopped')
-    useAudioStore.getState().setCurrentTime(0)
   }
 
-  /** 跳转到指定位置；播放中则继续播放，否则仅更新位置。 */
-  seek(offsetSeconds: number): void {
+  /** 跳转到指定位置。返回跳转后的播放位置（秒），供调用方同步 store。 */
+  seek(offsetSeconds: number): number {
     this.processor.seek(offsetSeconds)
-    useAudioStore.getState().setCurrentTime(this.processor.getCurrentTime())
+    return this.processor.getCurrentTime()
   }
 
   /** 将处理参数应用到实时处理链。 */

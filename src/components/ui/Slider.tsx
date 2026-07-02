@@ -5,6 +5,7 @@
  * PageUp/PageDown 按 10 倍步长快速调节，失焦时自动钳制到有效区间。
  */
 import { useEffect, useId, useState, type ChangeEvent, type KeyboardEvent } from 'react'
+import { FOCUS_RING } from '@/lib/styles'
 import { cn } from '@/lib/utils'
 
 export interface SliderProps {
@@ -145,7 +146,7 @@ export function Slider({
             aria-describedby={describedById}
             className={cn(
               'w-20 rounded-md border border-bass-border bg-bass-bg px-2 py-1 text-right text-sm text-bass-text',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bass-bg',
+              FOCUS_RING,
               'disabled:cursor-not-allowed',
             )}
           />
@@ -169,7 +170,7 @@ export function Slider({
         aria-describedby={describedById}
         className={cn(
           'h-2 w-full cursor-pointer appearance-none rounded-full bg-bass-border accent-accent',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bass-bg',
+          FOCUS_RING,
           'disabled:cursor-not-allowed',
         )}
       />

@@ -98,7 +98,13 @@ describe('useAudioStore actions', () => {
 
   // ---- 文件相关 ----
 
-  it('setAudioFile 后状态更新', () => {
+  it('setAudioFile 后状态更新（含 playState/currentTime/loadError 重置）', () => {
+    // 预置脏状态：播放中、有进度、有错误
+    useAudioStore.setState({
+      playState: 'playing',
+      currentTime: 5.5,
+      loadError: '旧错误',
+    })
     const buffer = makeBufferStub()
     const meta: AudioFileMeta = {
       fileName: 'demo.mp3',
@@ -111,6 +117,10 @@ describe('useAudioStore actions', () => {
     const state = useAudioStore.getState()
     expect(state.audioBuffer).toBe(buffer)
     expect(state.audioMeta).toEqual(meta)
+    // setAudioFile 应一并重置播放状态、进度与错误，保证单次 set 内状态一致
+    expect(state.playState).toBe('stopped')
+    expect(state.currentTime).toBe(0)
+    expect(state.loadError).toBeNull()
   })
 
   it('setLoadingFile 切换加载状态', () => {
@@ -127,7 +137,7 @@ describe('useAudioStore actions', () => {
     expect(useAudioStore.getState().loadError).toBeNull()
   })
 
-  it('clearAudioFile 清除音频数据与元信息', () => {
+  it('clearAudioFile 清除音频数据并重置播放状态', () => {
     const buffer = makeBufferStub()
     const meta: AudioFileMeta = {
       fileName: 'test.wav',
@@ -137,9 +147,16 @@ describe('useAudioStore actions', () => {
       numberOfChannels: 1,
     }
     useAudioStore.getState().setAudioFile(buffer, meta)
+    // 预置播放中状态
+    useAudioStore.setState({ playState: 'playing', currentTime: 3.2 })
     useAudioStore.getState().clearAudioFile()
-    expect(useAudioStore.getState().audioBuffer).toBeNull()
-    expect(useAudioStore.getState().audioMeta).toBeNull()
+    const state = useAudioStore.getState()
+    expect(state.audioBuffer).toBeNull()
+    expect(state.audioMeta).toBeNull()
+    expect(state.loadError).toBeNull()
+    expect(state.isLoadingFile).toBe(false)
+    expect(state.playState).toBe('stopped')
+    expect(state.currentTime).toBe(0)
   })
 
   // ---- 参数更新（防抖反查预设） ----

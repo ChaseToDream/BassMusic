@@ -2,27 +2,11 @@ import { RotateCcw, SlidersHorizontal } from 'lucide-react'
 
 import { Panel } from '@/components/ui/Panel'
 import { Slider } from '@/components/ui/Slider'
+import { formatFrequency, formatGain, formatQ } from '@/lib/format'
+import { FOCUS_RING } from '@/lib/styles'
 import { DEFAULT_EQUALIZER_BANDS } from '@/lib/types'
+import { cn } from '@/lib/utils'
 import { useAudioStore } from '@/store/useAudioStore'
-
-/** 将频率（Hz）格式化为人类可读文本：≥1000 显示 kHz。 */
-function formatFrequency(hz: number): string {
-  if (hz >= 1000) {
-    const khz = hz / 1000
-    return `${Number.isInteger(khz) ? khz.toString() : khz.toFixed(1)} kHz`
-  }
-  return `${hz} Hz`
-}
-
-/** 将增益（dB）格式化，正增益带 + 号，统一一位小数。 */
-function formatGain(db: number): string {
-  return `${db >= 0 ? '+' : ''}${db.toFixed(1)} dB`
-}
-
-/** 格式化 Q 值，统一一位小数。 */
-function formatQ(q: number): string {
-  return q.toFixed(1)
-}
 
 /** 均衡器柱状图尺寸常量。 */
 const CHART_W = 300
@@ -57,7 +41,10 @@ export default function EqualizerPanel() {
           type="button"
           onClick={handleReset}
           aria-label="重置均衡器"
-          className="inline-flex items-center gap-1 rounded-md border border-bass-border px-2 py-1 text-xs text-bass-muted transition-colors hover:border-bass-muted hover:text-bass-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bass-bg"
+          className={cn(
+            'inline-flex items-center gap-1 rounded-md border border-bass-border px-2 py-1 text-xs text-bass-muted transition-colors hover:border-bass-muted hover:text-bass-text',
+            FOCUS_RING,
+          )}
         >
           <RotateCcw className="h-3.5 w-3.5" />
           重置

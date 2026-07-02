@@ -8,15 +8,17 @@
  * 跳过规则：
  * - 焦点在 INPUT / TEXTAREA / SELECT / contenteditable 时不触发；
  * - 按下 Ctrl / Meta 时不触发；
- * - Space 在 BUTTON 上不触发；
+ * - Space 与 S 在 BUTTON 上不触发（避免与按钮原生激活冲突）；
  * - 方向键在 CANVAS 上不触发；
  * - 任一对话框打开时，除该对话框自身的 Esc 外，其余快捷键均不触发。
  *
- * 播放相关操作统一通过 audioService 完成，避免直接操作 AudioProcessor。
+ * 播放相关操作统一通过 audioService 完成，并在调用后同步 store 状态
+ * （audioService 自身不再直接写 store）。
  */
 import { useEffect, useRef } from 'react'
 
 import { audioService } from '@/lib/audio/audioService'
+import type { PlayState } from '@/lib/types'
 import { useAudioStore } from '@/store/useAudioStore'
 
 /** 焦点在这些标签上时，所有快捷键均不触发。 */
@@ -28,6 +30,7 @@ interface ShortcutContext {
   currentTime: number
   isExportDialogOpen: boolean
   isHelpDialogOpen: boolean
+  setPlayState: (state: PlayState) => void
   setCurrentTime: (t: number) => void
   togglePreviewMode: () => void
   toggleHighContrast: () => void
@@ -52,6 +55,7 @@ export function useGlobalShortcuts(): void {
   const currentTime = useAudioStore((s) => s.currentTime)
   const isExportDialogOpen = useAudioStore((s) => s.isExportDialogOpen)
   const isHelpDialogOpen = useAudioStore((s) => s.isHelpDialogOpen)
+  const setPlayState = useAudioStore((s) => s.setPlayState)
   const setCurrentTime = useAudioStore((s) => s.setCurrentTime)
   const togglePreviewMode = useAudioStore((s) => s.togglePreviewMode)
   const toggleHighContrast = useAudioStore((s) => s.toggleHighContrast)
@@ -63,6 +67,7 @@ export function useGlobalShortcuts(): void {
     currentTime,
     isExportDialogOpen,
     isHelpDialogOpen,
+    setPlayState,
     setCurrentTime,
     togglePreviewMode,
     toggleHighContrast,
@@ -74,6 +79,7 @@ export function useGlobalShortcuts(): void {
     currentTime,
     isExportDialogOpen,
     isHelpDialogOpen,
+    setPlayState,
     setCurrentTime,
     togglePreviewMode,
     toggleHighContrast,
@@ -94,6 +100,7 @@ export function useGlobalShortcuts(): void {
         currentTime,
         isExportDialogOpen,
         isHelpDialogOpen,
+        setPlayState,
         setCurrentTime,
         togglePreviewMode,
         toggleHighContrast,
@@ -112,9 +119,12 @@ export function useGlobalShortcuts(): void {
           if (tag === 'BUTTON') return
           e.preventDefault()
           if (audioService.isPlaying()) {
-            audioService.pause()
+            const pos = audioService.pause()
+            setPlayState('paused')
+            setCurrentTime(pos)
           } else {
             audioService.play(currentTime)
+            setPlayState('playing')
           }
           break
         }
@@ -124,6 +134,8 @@ export function useGlobalShortcuts(): void {
           if (tag === 'BUTTON') return
           e.preventDefault()
           audioService.stop()
+          setPlayState('stopped')
+          setCurrentTime(0)
           break
         }
         case 'ArrowLeft': {
@@ -131,8 +143,8 @@ export function useGlobalShortcuts(): void {
           if (tag === 'CANVAS') return
           e.preventDefault()
           const step = e.shiftKey ? 5 : 1
-          audioService.seek(Math.max(0, currentTime - step))
-          setCurrentTime(audioService.getCurrentTime())
+          const pos = audioService.seek(Math.max(0, currentTime - step))
+          setCurrentTime(pos)
           break
         }
         case 'ArrowRight': {
@@ -140,14 +152,13 @@ export function useGlobalShortcuts(): void {
           if (tag === 'CANVAS') return
           e.preventDefault()
           const step = e.shiftKey ? 5 : 1
-          audioService.seek(Math.min(duration, currentTime + step))
-          setCurrentTime(audioService.getCurrentTime())
+          const pos = audioService.seek(Math.min(duration, currentTime + step))
+          setCurrentTime(pos)
           break
         }
         case 'b':
         case 'B': {
           if (!hasBuffer || dialogOpen) return
-          if (tag === 'BUTTON') return
           e.preventDefault()
           togglePreviewMode()
           break
@@ -155,7 +166,6 @@ export function useGlobalShortcuts(): void {
         case 'c':
         case 'C': {
           if (dialogOpen) return
-          if (tag === 'BUTTON') return
           e.preventDefault()
           toggleHighContrast()
           break
@@ -163,7 +173,6 @@ export function useGlobalShortcuts(): void {
         case 'h':
         case 'H': {
           if (dialogOpen) return
-          if (tag === 'BUTTON') return
           e.preventDefault()
           setHelpDialogOpen(true)
           break
@@ -171,7 +180,6 @@ export function useGlobalShortcuts(): void {
         case 'e':
         case 'E': {
           if (!hasBuffer || dialogOpen) return
-          if (tag === 'BUTTON') return
           e.preventDefault()
           setExportDialogOpen(true)
           break

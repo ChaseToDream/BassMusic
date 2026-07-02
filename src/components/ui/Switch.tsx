@@ -4,6 +4,7 @@
  * 封装为 button + role="switch"，原生 button 默认支持 Space/Enter 触发点击，
  * 因此无需手动处理键盘事件。
  */
+import { FOCUS_RING } from '@/lib/styles'
 import { cn } from '@/lib/utils'
 
 export interface SwitchProps {
@@ -30,7 +31,7 @@ export function Switch({ label, checked, onChange, describedById }: SwitchProps)
         onClick={() => onChange(!checked)}
         className={cn(
           'relative h-6 w-11 shrink-0 rounded-full transition-colors',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bass-bg',
+          FOCUS_RING,
           checked ? 'bg-accent' : 'bg-bass-border',
         )}
       >

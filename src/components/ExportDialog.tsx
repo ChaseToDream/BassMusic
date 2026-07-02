@@ -1,7 +1,9 @@
 import { CheckCircle2, Loader2, X } from 'lucide-react'
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 
 import { downloadBlob, exportAudio } from '@/lib/audio/exporter'
+import { logger } from '@/lib/logger'
+import { FOCUS_RING } from '@/lib/styles'
 import type { ExportFormat } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { useAudioStore } from '@/store/useAudioStore'
@@ -62,35 +64,41 @@ export default function ExportDialog() {
     return () => window.clearTimeout(t)
   }, [isOpen, exportProgress, setOpen, setExportProgress])
 
-  if (!isOpen) return null
-
   const baseName = audioMeta?.fileName.replace(/\.[^.]+$/, '') || 'audio'
   const ext = format === 'wav' ? 'wav' : 'mp3'
   const filename = `${baseName}_bassmusic.${ext}`
 
-  const handleExport = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!audioBuffer) return
-    try {
-      setExportProgress({
-        isExporting: true,
-        progress: 0,
-        format,
-        error: undefined,
-      })
-      const blob = await exportAudio(
-        audioBuffer,
-        params,
-        { format, mp3Bitrate: format === 'mp3' ? bitrate : undefined },
-        (p) => setExportProgress({ progress: p }),
-      )
-      downloadBlob(blob, filename)
-      setExportProgress({ isExporting: false, progress: 1 })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      setExportProgress({ isExporting: false, error: `导出失败：${message}` })
-    }
-  }
+  // 用 useCallback 包裹：仅依赖必要值，避免每次 render 重建导致子组件无谓重渲染
+  // 注意：必须在 `if (!isOpen) return null` 之前调用，保证 Hooks 顺序稳定
+  const handleExport = useCallback(
+    async (e: FormEvent) => {
+      e.preventDefault()
+      if (!audioBuffer) return
+      try {
+        setExportProgress({
+          isExporting: true,
+          progress: 0,
+          format,
+          error: undefined,
+        })
+        const blob = await exportAudio(
+          audioBuffer,
+          params,
+          { format, mp3Bitrate: format === 'mp3' ? bitrate : undefined },
+          (p) => setExportProgress({ progress: p }),
+        )
+        downloadBlob(blob, filename)
+        setExportProgress({ isExporting: false, progress: 1 })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        logger.error('导出失败：', err)
+        setExportProgress({ isExporting: false, error: `导出失败：${message}` })
+      }
+    },
+    [audioBuffer, params, format, bitrate, filename, setExportProgress],
+  )
+
+  if (!isOpen) return null
 
   const isExporting = exportProgress.isExporting
   const isDone = !isExporting && exportProgress.progress >= 1 && !exportProgress.error
@@ -117,7 +125,10 @@ export default function ExportDialog() {
             type="button"
             aria-label="关闭"
             onClick={() => setOpen(false)}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-bass-muted hover:text-bass-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bass-bg"
+            className={cn(
+              'inline-flex h-8 w-8 items-center justify-center rounded-md text-bass-muted hover:text-bass-text',
+              FOCUS_RING,
+            )}
           >
             <X className="h-4 w-4" />
           </button>
@@ -238,14 +249,20 @@ export default function ExportDialog() {
               type="button"
               onClick={() => setOpen(false)}
               disabled={isExporting}
-              className="rounded-md border border-bass-border px-4 py-2 text-sm text-bass-muted hover:text-bass-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bass-bg disabled:cursor-not-allowed disabled:opacity-50"
+              className={cn(
+                'rounded-md border border-bass-border px-4 py-2 text-sm text-bass-muted hover:text-bass-text disabled:cursor-not-allowed disabled:opacity-50',
+                FOCUS_RING,
+              )}
             >
               取消
             </button>
             <button
               type="submit"
               disabled={isExporting || !audioBuffer}
-              className="inline-flex items-center gap-1.5 rounded-md bg-accent px-4 py-2 text-sm font-medium text-bass-bg hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bass-bg disabled:cursor-not-allowed disabled:opacity-50"
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-md bg-accent px-4 py-2 text-sm font-medium text-bass-bg hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50',
+                FOCUS_RING,
+              )}
             >
               {isExporting && <Loader2 className="h-4 w-4 animate-spin" />}
               {isExporting ? '导出中' : '开始导出'}

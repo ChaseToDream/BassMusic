@@ -1,9 +1,12 @@
 /**
  * A/B 预览播放器。
  *
- * 通过 audioService 统一控制播放与参数更新，自身仅负责 UI 渲染与
- * 播放进度动画同步。原始模式通过 buildBypassParams 构造旁路参数，
- * 实现等效直通预览。
+ * 作为 audioService 与 store 之间的唯一同步点：
+ * - 订阅 store 中播放相关字段，通过 effect 将 buffer/params 同步到 audioService；
+ * - 用户交互（play/pause/stop/seek）调用 audioService 后由本组件回写 store；
+ * - 通过 audioService.onEnded 订阅播放结束事件，同步 store 状态。
+ *
+ * 原始模式通过 buildBypassParams 构造旁路参数，实现等效直通预览。
  */
 import { Pause, Play, Repeat, Square } from 'lucide-react'
 import { useCallback, useEffect } from 'react'
@@ -13,6 +16,7 @@ import WaveformViewer from '@/components/WaveformViewer'
 import { audioService } from '@/lib/audio/audioService'
 import { buildBypassParams } from '@/lib/audio/params'
 import { formatSeconds } from '@/lib/format'
+import { FOCUS_RING } from '@/lib/styles'
 import { cn } from '@/lib/utils'
 import { useAudioStore } from '@/store/useAudioStore'
 
@@ -29,11 +33,23 @@ export default function PreviewPlayer() {
   const currentTime = useAudioStore((s) => s.currentTime)
   const previewMode = useAudioStore((s) => s.previewMode)
   const setCurrentTime = useAudioStore((s) => s.setCurrentTime)
+  const setPlayState = useAudioStore((s) => s.setPlayState)
   const togglePreviewMode = useAudioStore((s) => s.togglePreviewMode)
 
   const duration = audioMeta?.duration ?? audioService.getDuration()
 
-  // 同步音频缓冲到 audioService
+  // 订阅播放结束事件：audioService 不再直接写 store，由本回调同步
+  useEffect(() => {
+    audioService.onEnded = () => {
+      setPlayState('stopped')
+      setCurrentTime(0)
+    }
+    return () => {
+      audioService.onEnded = null
+    }
+  }, [setPlayState, setCurrentTime])
+
+  // 同步音频缓冲到 audioService（store 的 setAudioFile 已重置 playState/currentTime）
   useEffect(() => {
     if (audioBuffer) {
       audioService.setBuffer(audioBuffer)
@@ -47,11 +63,17 @@ export default function PreviewPlayer() {
   }, [params, previewMode])
 
   // 实时回写 currentTime（仅播放时）
+  // 节流到每 100ms 更新一次 store，将重渲染频率从 60fps 降到 10fps，
+  // 对时间显示与进度条而言足够流畅，同时大幅减少无关重渲染
   useEffect(() => {
     if (playState !== 'playing') return
     let raf = 0
-    const tick = () => {
-      setCurrentTime(audioService.getCurrentTime())
+    let lastUpdate = 0
+    const tick = (now: number) => {
+      if (now - lastUpdate >= 100) {
+        setCurrentTime(audioService.getCurrentTime())
+        lastUpdate = now
+      }
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
@@ -61,22 +83,27 @@ export default function PreviewPlayer() {
   const handlePlayPause = useCallback(() => {
     if (!audioBuffer) return
     if (playState === 'playing') {
-      audioService.pause()
+      const pos = audioService.pause()
+      setPlayState('paused')
+      setCurrentTime(pos)
     } else {
       audioService.play(currentTime)
+      setPlayState('playing')
     }
-  }, [audioBuffer, playState, currentTime])
+  }, [audioBuffer, playState, currentTime, setPlayState, setCurrentTime])
 
   const handleStop = useCallback(() => {
     audioService.stop()
-  }, [])
+    setPlayState('stopped')
+    setCurrentTime(0)
+  }, [setPlayState, setCurrentTime])
 
   const handleSeek = useCallback(
     (time: number) => {
       if (!audioBuffer) return
       const target = Math.max(0, Math.min(time, duration))
-      audioService.seek(target)
-      setCurrentTime(audioService.getCurrentTime())
+      const pos = audioService.seek(target)
+      setCurrentTime(pos)
     },
     [audioBuffer, duration, setCurrentTime],
   )
@@ -86,15 +113,18 @@ export default function PreviewPlayer() {
     const pos = audioService.getCurrentTime()
     if (wasPlaying) {
       audioService.stop()
+      setPlayState('stopped')
     }
+    // 切换模式前手动应用参数，避免 effect 延迟导致 play 时使用旧参数
     const nextMode = previewMode === 'original' ? 'processed' : 'original'
     const nextParams = nextMode === 'original' ? buildBypassParams(params) : params
     audioService.updateParams(nextParams)
     togglePreviewMode()
     if (wasPlaying) {
       audioService.play(pos)
+      setPlayState('playing')
     }
-  }, [playState, previewMode, params, togglePreviewMode])
+  }, [playState, previewMode, params, togglePreviewMode, setPlayState])
 
   const hasBuffer = Boolean(audioBuffer)
   const isPlaying = playState === 'playing'
@@ -109,7 +139,8 @@ export default function PreviewPlayer() {
           aria-pressed={previewMode === 'processed'}
           aria-label="切换原始与处理后预览"
           className={cn(
-            'inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bass-bg',
+            'inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors',
+            FOCUS_RING,
             previewMode === 'processed'
               ? 'border-accent bg-accent/10 text-accent'
               : 'border-bass-border text-bass-muted hover:text-bass-text',
@@ -143,7 +174,10 @@ export default function PreviewPlayer() {
             onClick={handlePlayPause}
             disabled={!hasBuffer}
             aria-label={isPlaying ? '暂停' : '播放'}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-accent text-bass-bg transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bass-bg disabled:cursor-not-allowed disabled:opacity-50"
+            className={cn(
+              'inline-flex h-10 w-10 items-center justify-center rounded-full bg-accent text-bass-bg transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50',
+              FOCUS_RING,
+            )}
           >
             {isPlaying ? (
               <Pause className="h-5 w-5" />
@@ -156,7 +190,10 @@ export default function PreviewPlayer() {
             onClick={handleStop}
             disabled={!hasBuffer}
             aria-label="停止"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-bass-border text-bass-muted transition-colors hover:text-bass-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bass-bg disabled:cursor-not-allowed disabled:opacity-50"
+            className={cn(
+              'inline-flex h-9 w-9 items-center justify-center rounded-md border border-bass-border text-bass-muted transition-colors hover:text-bass-text disabled:cursor-not-allowed disabled:opacity-50',
+              FOCUS_RING,
+            )}
           >
             <Square className="h-4 w-4" />
           </button>

@@ -10,13 +10,15 @@
  *   最终输出叠加 makeupGain 偏移。
  */
 import { Gauge, RotateCcw } from 'lucide-react'
-import { DEFAULT_COMPRESSOR_PARAMS } from '@/lib/types'
-import { FOCUS_RING } from '@/lib/styles'
-import { useAudioStore } from '@/store/useAudioStore'
-import { cn } from '@/lib/utils'
+import { useMemo } from 'react'
+
 import { Panel } from '@/components/ui/Panel'
 import { Slider } from '@/components/ui/Slider'
 import { Switch } from '@/components/ui/Switch'
+import { CANVAS_COLORS, FOCUS_RING } from '@/lib/styles'
+import { DEFAULT_COMPRESSOR_PARAMS } from '@/lib/types'
+import { cn } from '@/lib/utils'
+import { useAudioStore } from '@/store/useAudioStore'
 
 /* ===== SVG 压缩曲线常量 ===== */
 /** 画布宽度。 */
@@ -42,12 +44,6 @@ const DB_MAX = 0
 /** dB 范围跨度。 */
 const DB_RANGE = DB_MAX - DB_MIN
 
-/* 主题色（与 tailwind.config 保持一致，用于 SVG 描边） */
-const COLOR_BORDER = '#243049'
-const COLOR_MUTED = '#8a94a8'
-const COLOR_GRID = '#3a4760'
-const COLOR_ACCENT = '#facc15'
-
 /** 输入 dB → 画布 x 坐标。 */
 function mapX(db: number): number {
   return LX + ((db - DB_MIN) / DB_RANGE) * PLOT_W
@@ -57,6 +53,9 @@ function mapX(db: number): number {
 function mapY(db: number): number {
   return TY + PLOT_H - ((db - DB_MIN) / DB_RANGE) * PLOT_H
 }
+
+/** 1:1 参考线（无压缩无增益，仅与画布范围相关，模块级常量）。 */
+const REF_LINE_PATH = `M ${mapX(DB_MIN)},${mapY(DB_MIN)} L ${mapX(DB_MAX)},${mapY(DB_MAX)}`
 
 /** 计算压缩器输入对应的输出 dB（含 makeupGain 偏移）。 */
 function computeOutput(
@@ -84,9 +83,11 @@ export default function CompressorPanel() {
   const updateCompressor = useAudioStore((s) => s.updateCompressor)
   const { enabled, threshold, ratio, attack, release, makeupGain } = compressor
 
-  const curveD = buildCurvePath(threshold, ratio, makeupGain)
-  // 1:1 参考线（无压缩无增益）
-  const refD = `M ${mapX(DB_MIN)},${mapY(DB_MIN)} L ${mapX(DB_MAX)},${mapY(DB_MAX)}`
+  // 仅在 threshold/ratio/makeupGain 变化时重算路径，避免每次 render 重算
+  const curveD = useMemo(
+    () => buildCurvePath(threshold, ratio, makeupGain),
+    [threshold, ratio, makeupGain],
+  )
 
   return (
     <Panel
@@ -121,7 +122,7 @@ export default function CompressorPanel() {
             y1={mapY(-30)}
             x2={mapX(DB_MAX)}
             y2={mapY(-30)}
-            stroke={COLOR_BORDER}
+            stroke={CANVAS_COLORS.border}
             strokeWidth={1}
             strokeDasharray="2 3"
           />
@@ -130,15 +131,15 @@ export default function CompressorPanel() {
             y1={mapY(DB_MIN)}
             x2={mapX(-30)}
             y2={mapY(DB_MAX)}
-            stroke={COLOR_BORDER}
+            stroke={CANVAS_COLORS.border}
             strokeWidth={1}
             strokeDasharray="2 3"
           />
           {/* 1:1 参考线 */}
           <path
-            d={refD}
+            d={REF_LINE_PATH}
             fill="none"
-            stroke={COLOR_GRID}
+            stroke={CANVAS_COLORS.grid}
             strokeWidth={1}
             strokeDasharray="3 3"
           />
@@ -148,7 +149,7 @@ export default function CompressorPanel() {
             y1={mapY(DB_MIN)}
             x2={mapX(threshold)}
             y2={mapY(DB_MAX)}
-            stroke={COLOR_ACCENT}
+            stroke={CANVAS_COLORS.accent}
             strokeWidth={1}
             strokeDasharray="2 2"
             opacity={0.5}
@@ -157,7 +158,7 @@ export default function CompressorPanel() {
           <path
             d={curveD}
             fill="none"
-            stroke={COLOR_ACCENT}
+            stroke={CANVAS_COLORS.accent}
             strokeWidth={2}
             strokeLinejoin="round"
             strokeLinecap="round"
@@ -168,7 +169,7 @@ export default function CompressorPanel() {
             y1={mapY(DB_MIN)}
             x2={mapX(DB_MAX)}
             y2={mapY(DB_MIN)}
-            stroke={COLOR_MUTED}
+            stroke={CANVAS_COLORS.muted}
             strokeWidth={1}
           />
           <line
@@ -176,7 +177,7 @@ export default function CompressorPanel() {
             y1={mapY(DB_MIN)}
             x2={mapX(DB_MIN)}
             y2={mapY(DB_MAX)}
-            stroke={COLOR_MUTED}
+            stroke={CANVAS_COLORS.muted}
             strokeWidth={1}
           />
           {/* 轴标签 */}
@@ -184,7 +185,7 @@ export default function CompressorPanel() {
             x={mapX(DB_MAX)}
             y={mapY(DB_MIN) + 16}
             textAnchor="middle"
-            fill={COLOR_MUTED}
+            fill={CANVAS_COLORS.muted}
             fontSize={10}
           >
             输入 dB
@@ -193,7 +194,7 @@ export default function CompressorPanel() {
             x={10}
             y={mapY(DB_MAX) + 4}
             textAnchor="middle"
-            fill={COLOR_MUTED}
+            fill={CANVAS_COLORS.muted}
             fontSize={10}
             transform={`rotate(-90 10 ${mapY(DB_MAX)})`}
           >
@@ -203,7 +204,7 @@ export default function CompressorPanel() {
             x={mapX(DB_MIN)}
             y={H - 8}
             textAnchor="middle"
-            fill={COLOR_MUTED}
+            fill={CANVAS_COLORS.muted}
             fontSize={9}
           >
             {DB_MIN}
@@ -212,7 +213,7 @@ export default function CompressorPanel() {
             x={mapX(DB_MAX)}
             y={H - 8}
             textAnchor="middle"
-            fill={COLOR_MUTED}
+            fill={CANVAS_COLORS.muted}
             fontSize={9}
           >
             {DB_MAX}

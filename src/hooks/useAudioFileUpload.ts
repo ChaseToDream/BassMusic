@@ -5,6 +5,7 @@
  * 返回当前状态与事件处理器，供 FileUploader 组件族消费。
  */
 import {
+  useEffect,
   useRef,
   useState,
   type ChangeEvent,
@@ -18,6 +19,7 @@ import {
   validateAudioFile,
   verifyMagicBytes,
 } from '@/lib/audio/decoder'
+import { logger } from '@/lib/logger'
 import { useAudioStore } from '@/store/useAudioStore'
 import type { AudioFileMeta } from '@/lib/types'
 
@@ -67,6 +69,17 @@ export function useAudioFileUpload(): UseAudioFileUploadReturn {
   const setLoadError = useAudioStore((s) => s.setLoadError)
   const clearAudioFile = useAudioStore((s) => s.clearAudioFile)
 
+  // 并发取消：每次 handleFile 自增 reqId，await 后判断是否为最新请求
+  const reqIdRef = useRef(0)
+  // unmount 保护：避免卸载后仍写 store
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
   const state: UploadState = audioMeta
     ? 'loaded'
     : loadError
@@ -78,29 +91,36 @@ export function useAudioFileUpload(): UseAudioFileUploadReturn {
   const openPicker = () => inputRef.current?.click()
 
   const handleFile = async (file: File) => {
+    const currentReqId = ++reqIdRef.current
+    const isStale = () => currentReqId !== reqIdRef.current || !mountedRef.current
+
     setLoadError(null)
 
     const result = validateAudioFile(file)
     if (!result.valid) {
-      setLoadError(result.error ?? '文件无效')
+      if (!isStale()) setLoadError(result.error ?? '文件无效')
       return
     }
 
     const magicResult = await verifyMagicBytes(file)
+    if (isStale()) return
     if (!magicResult.valid) {
-      setLoadError(magicResult.error ?? '文件无效')
+      if (!isStale()) setLoadError(magicResult.error ?? '文件无效')
       return
     }
 
     setLoadingFile(true)
     try {
       const buffer = await decodeAudioFile(file)
+      if (isStale()) return
       const meta = getAudioMeta(file, buffer)
       setAudioFile(buffer, meta)
-    } catch {
+    } catch (err) {
+      if (isStale()) return
+      logger.error('音频解码失败：', err)
       setLoadError('音频文件解码失败，可能已损坏或编码不支持')
     } finally {
-      setLoadingFile(false)
+      if (!isStale()) setLoadingFile(false)
     }
   }
 

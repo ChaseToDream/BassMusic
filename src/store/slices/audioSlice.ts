@@ -32,8 +32,28 @@ export const createAudioSlice: StateCreator<AudioStore, [], [], AudioSlice> = (s
   isLoadingFile: false,
   loadError: null,
 
-  setAudioFile: (audioBuffer, audioMeta) => set({ audioBuffer, audioMeta }),
+  /**
+   * 设置音频文件时一并重置播放状态与错误，保证 store 在单次 set 内一致：
+   * 新文件加载后 playState 必为 stopped、currentTime 必为 0、loadError 必清空。
+   * 这样 audioService 不再需要在 setBuffer 时回写 store，消除回环。
+   */
+  setAudioFile: (audioBuffer, audioMeta) =>
+    set({
+      audioBuffer,
+      audioMeta,
+      playState: 'stopped',
+      currentTime: 0,
+      loadError: null,
+    }),
   setLoadingFile: (isLoadingFile) => set({ isLoadingFile }),
   setLoadError: (loadError) => set({ loadError }),
-  clearAudioFile: () => set({ audioBuffer: null, audioMeta: null }),
+  clearAudioFile: () =>
+    set({
+      audioBuffer: null,
+      audioMeta: null,
+      loadError: null,
+      isLoadingFile: false,
+      playState: 'stopped',
+      currentTime: 0,
+    }),
 })

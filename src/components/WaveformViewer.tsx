@@ -8,6 +8,7 @@ import {
 } from 'react'
 
 import { computePeaksAsync } from '@/lib/audio/workerClient'
+import { CANVAS_COLORS, FOCUS_RING } from '@/lib/styles'
 import { cn } from '@/lib/utils'
 
 export interface WaveformViewerProps {
@@ -20,8 +21,6 @@ export interface WaveformViewerProps {
   className?: string
 }
 
-const ACCENT = '#facc15'
-const MUTED = '#8a94a8'
 const MONO_HEIGHT = 160
 const STEREO_HEIGHT = 200
 
@@ -80,7 +79,7 @@ function drawFromPeaks(
       const min = channelPeaks[x * 2]
       const max = channelPeaks[x * 2 + 1]
       const played = x <= progressX
-      ctx.fillStyle = played ? ACCENT : MUTED
+      ctx.fillStyle = played ? CANVAS_COLORS.accent : CANVAS_COLORS.muted
       const yTop = mid - max * half
       const yBottom = mid - min * half
       const h = Math.max(1, yBottom - yTop)
@@ -90,7 +89,7 @@ function drawFromPeaks(
 
   // 进度指示线
   if (progressX > 0 && progressX <= cssWidth) {
-    ctx.fillStyle = ACCENT
+    ctx.fillStyle = CANVAS_COLORS.accent
     ctx.fillRect(progressX - 1, 0, 2, cssHeight)
   }
 }
@@ -239,7 +238,8 @@ export default function WaveformViewer({
         onClick={handleClick}
         onKeyDown={handleKeyDown}
         className={cn(
-          'block w-full cursor-pointer rounded-md border border-bass-border bg-bass-bg/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bass-bg',
+          'block w-full cursor-pointer rounded-md border border-bass-border bg-bass-bg/40',
+          FOCUS_RING,
           isStereo ? 'h-[200px]' : 'h-[160px]',
         )}
       />

@@ -81,7 +81,7 @@ export const createParamSlice: StateCreator<AudioStore, [], [], ParamSlice> = (s
     updateEqualizerBand: (index, band) =>
       set((state) => {
         const equalizer = state.params.equalizer.map((current, i) =>
-          i === index ? { ...current, ...band } : { ...current },
+          i === index ? { ...current, ...band } : current,
         )
         const params: AudioProcessParams = { ...state.params, equalizer }
         schedulePresetDetect()

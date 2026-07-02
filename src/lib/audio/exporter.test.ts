@@ -2,19 +2,19 @@
  * exporter 模块单元测试。
  *
  * 限制说明：
- * - encodeWav / downloadBlob 在 jsdom 中可真实运行（仅依赖 ArrayBuffer/DataView/Blob/URL）。
- * - encodeMp3 依赖 lamejs：lamejs 为老式 UMD 包，其内部通过全局变量耦合
- *   （MPEGMode / Lame / BitStream 等），在 vitest 的 ESM 环境下直接 import 会抛
- *   `MPEGMode is not defined`。此处用 vi.mock 替换 lamejs 以验证 encodeMp3 的
- *   分块、合并与 flush 逻辑；生产环境由 vite 的 optimizeDeps 处理 CJS 全局，不受影响。
+ * - encodeWav 在 jsdom 中可真实运行（仅依赖 ArrayBuffer/DataView/Blob/URL）。
+ * - encodeMp3 依赖 @breezystack/lamejs：虽为 ESM 包可直接 import，但为验证 encodeMp3
+ *   的分块、合并与 flush 逻辑（而非 lamejs 编码正确性），仍用 vi.mock 替换为固定
+ *   字节输出，使断言可预测。
  * - renderOffline / exportAudio 依赖 OfflineAudioContext，此处通过 vi.stubGlobal
  *   注入一个最小 mock（以普通 function 实现，支持 new 调用）进行验证。
+ * - exportAudio 中的 WAV 编码现走 Web Worker（encodeWavAsync），此处 mock workerClient
+ *   使测试在 jsdom 中可运行；encodeWav 同步版本仍可直接测试。
  */
 import { describe, it, expect, afterEach, vi } from 'vitest'
 
-// mock lamejs：Mp3Encoder.encodeBuffer 固定返回 2 字节，flush 返回 1 字节，
-// 以便断言 encodeMp3 的分块与合并逻辑。
-vi.mock('lamejs', () => {
+// mock @breezystack/lamejs
+vi.mock('@breezystack/lamejs', () => {
   class MockMp3Encoder {
     encodeBuffer(): Uint8Array {
       return new Uint8Array([1, 2])
@@ -24,11 +24,19 @@ vi.mock('lamejs', () => {
     }
   }
   return {
-    default: {
-      Mp3Encoder: MockMp3Encoder,
-    },
+    Mp3Encoder: MockMp3Encoder,
   }
 })
+
+// mock workerClient：encodeWavAsync 直接调用同步 encodeWav 实现，
+// 使 exportAudio 测试在 jsdom（无 Worker）中可运行。
+vi.mock('@/lib/audio/workerClient', () => ({
+  encodeWavAsync: vi.fn(async (buffer: AudioBuffer) => {
+    // 直接调用 exporter 模块内的同步 encodeWav（通过动态 import 获取）
+    const { encodeWav } = await import('./exporter')
+    return encodeWav(buffer)
+  }),
+}))
 
 import {
   encodeWav,
@@ -194,7 +202,7 @@ describe('exporter', () => {
       right[2] = -0.125
 
       const view = new DataView(
-        (await encodeWav(buffer as unknown as AudioBuffer).arrayBuffer()),
+        await encodeWav(buffer as unknown as AudioBuffer).arrayBuffer(),
       )
       const expectedL = [0.5 * 0x7fff, 0.25 * 0x7fff, 0.125 * 0x7fff]
       const expectedR = [-0.5 * 0x8000, -0.25 * 0x8000, -0.125 * 0x8000]
@@ -207,39 +215,40 @@ describe('exporter', () => {
   })
 
   describe('encodeMp3', () => {
-    // 注：lamejs 真实库在 vitest ESM 环境下因全局变量丢失无法运行，
-    // 此处通过 vi.mock 验证 encodeMp3 的分块编码与合并逻辑。
-    it('单声道：按 1152 采样分块编码并合并 flush 结果', () => {
+    // @breezystack/lamejs 为 ESM 包可直接运行，但为验证 encodeMp3 的分块编码与合并逻辑，
+    // 此处仍通过 vi.mock 替换为固定字节输出，使断言可预测。
+    // encodeMp3 现为 async（动态 import lamejs），所有断言需 await。
+    it('单声道：按 1152 采样分块编码并合并 flush 结果', async () => {
       const buffer = new MockAudioBuffer({
         length: 2304, // 恰好 2 个 1152 块
         sampleRate: 44100,
         numberOfChannels: 1,
       })
-      const blob = encodeMp3(buffer as unknown as AudioBuffer, 128)
+      const blob = await encodeMp3(buffer as unknown as AudioBuffer, 128)
       expect(blob.type).toBe('audio/mpeg')
       // 2 块 * 2 字节 + flush 1 字节 = 5
       expect(blob.size).toBe(2 * 2 + 1)
     })
 
-    it('立体声：使用双声道编码', () => {
+    it('立体声：使用双声道编码', async () => {
       const buffer = new MockAudioBuffer({
         length: 1152, // 1 个块
         sampleRate: 44100,
         numberOfChannels: 2,
       })
-      const blob = encodeMp3(buffer as unknown as AudioBuffer, 192)
+      const blob = await encodeMp3(buffer as unknown as AudioBuffer, 192)
       expect(blob.type).toBe('audio/mpeg')
       // 1 块 * 2 字节 + flush 1 字节 = 3
       expect(blob.size).toBe(2 + 1)
     })
 
-    it('非整块长度：末尾不足 1152 也能编码', () => {
+    it('非整块长度：末尾不足 1152 也能编码', async () => {
       const buffer = new MockAudioBuffer({
         length: 1500, // 1 整块 1152 + 1 块 348
         sampleRate: 44100,
         numberOfChannels: 1,
       })
-      const blob = encodeMp3(buffer as unknown as AudioBuffer, 320)
+      const blob = await encodeMp3(buffer as unknown as AudioBuffer, 320)
       expect(blob.type).toBe('audio/mpeg')
       // 2 块 * 2 字节 + flush 1 字节 = 5
       expect(blob.size).toBe(2 * 2 + 1)
@@ -291,8 +300,7 @@ describe('exporter', () => {
         sampleRate: 44100,
         numberOfChannels: 1,
       })
-      const { OfflineCtor, startRendering } =
-        createMockOfflineContext(renderedBuffer)
+      const { OfflineCtor, startRendering } = createMockOfflineContext(renderedBuffer)
       vi.stubGlobal('OfflineAudioContext', OfflineCtor)
 
       const inputBuffer = new MockAudioBuffer({

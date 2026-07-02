@@ -120,9 +120,7 @@ export default function EqualizerPanel() {
               key={band.id}
               className="space-y-3 rounded-md border border-bass-border p-3"
             >
-              <div className="text-xs font-medium text-bass-text">
-                频段 {i + 1}
-              </div>
+              <div className="text-xs font-medium text-bass-text">频段 {i + 1}</div>
               <Slider
                 label="频率"
                 ariaLabel={`频段 ${i + 1} 频率`}

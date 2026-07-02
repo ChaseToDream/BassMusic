@@ -19,7 +19,9 @@ type PrefixedWindow = {
  * 检测是否支持实时音频上下文（含 webkit 前缀回退）。
  */
 function hasRealtimeAudioSupport(w: PrefixedWindow): boolean {
-  return typeof w.AudioContext !== 'undefined' || typeof w.webkitAudioContext !== 'undefined'
+  return (
+    typeof w.AudioContext !== 'undefined' || typeof w.webkitAudioContext !== 'undefined'
+  )
 }
 
 /**

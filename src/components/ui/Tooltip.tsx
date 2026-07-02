@@ -4,7 +4,13 @@
  * 纯 CSS 实现（group-hover / group-focus-within 显示），无第三方依赖。
  * 通过 cloneElement 将 aria-describedby 注入到触发元素，保证无障碍关联。
  */
-import { cloneElement, isValidElement, useId, type ReactElement, type ReactNode } from 'react'
+import {
+  cloneElement,
+  isValidElement,
+  useId,
+  type ReactElement,
+  type ReactNode,
+} from 'react'
 import { cn } from '@/lib/utils'
 
 export interface TooltipProps {

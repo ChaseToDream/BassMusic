@@ -6,15 +6,12 @@
  */
 import { RotateCcw, Volume2 } from 'lucide-react'
 import { DEFAULT_LOW_SHELF_PARAMS } from '@/lib/types'
+import { FOCUS_RING } from '@/lib/styles'
 import { useAudioStore } from '@/store/useAudioStore'
 import { cn } from '@/lib/utils'
 import { Panel } from '@/components/ui/Panel'
 import { Slider } from '@/components/ui/Slider'
 import { Switch } from '@/components/ui/Switch'
-
-/** 统一焦点样式。 */
-const FOCUS_RING =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bass-bg'
 
 export default function LowShelfPanel() {
   const lowShelf = useAudioStore((s) => s.params.lowShelf)

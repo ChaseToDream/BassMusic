@@ -1,42 +1,25 @@
+/**
+ * A/B 预览播放器。
+ *
+ * 通过 audioService 统一控制播放与参数更新，自身仅负责 UI 渲染与
+ * 播放进度动画同步。原始模式通过 buildBypassParams 构造旁路参数，
+ * 实现等效直通预览。
+ */
 import { Pause, Play, Repeat, Square } from 'lucide-react'
 import { useCallback, useEffect } from 'react'
 
 import { Slider } from '@/components/ui/Slider'
 import WaveformViewer from '@/components/WaveformViewer'
-import { getAudioContext } from '@/lib/audio/context'
-import { getAudioProcessor } from '@/lib/audio/processor'
-import type { AudioProcessParams } from '@/lib/types'
+import { audioService } from '@/lib/audio/audioService'
+import { buildBypassParams } from '@/lib/audio/params'
+import { formatSeconds } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useAudioStore } from '@/store/useAudioStore'
 
-/** 将秒数格式化为 mm:ss。 */
-function formatTime(seconds: number): string {
-  let s = seconds
-  if (!Number.isFinite(s) || s < 0) s = 0
-  const m = Math.floor(s / 60)
-  const sec = Math.floor(s % 60)
-  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
-}
-
 /**
- * 构造旁路参数集：关闭低频增强与压缩器、清零各频段增益，
- * 用于"原始"预览模式，使处理链等价于直通。
- */
-function buildBypassParams(params: AudioProcessParams): AudioProcessParams {
-  return {
-    lowShelf: { ...params.lowShelf, enabled: false },
-    equalizer: params.equalizer.map((b) => ({ ...b, gain: 0 })),
-    compressor: { ...params.compressor, enabled: false },
-  }
-}
-
-/**
- * A/B 预览播放器。
+ * A/B 预览播放器组件。
  *
- * 持有共享 AudioProcessor 实例，与 store 双向同步：
- * - audioBuffer 变化时重置播放；
- * - params / previewMode 变化时更新处理链（原始模式旁路）；
- * - 播放时以 requestAnimationFrame 实时回写 currentTime。
+ * 订阅 store 中播放相关字段，并通过 audioService 同步到底层音频引擎。
  */
 export default function PreviewPlayer() {
   const audioBuffer = useAudioStore((s) => s.audioBuffer)
@@ -45,115 +28,73 @@ export default function PreviewPlayer() {
   const playState = useAudioStore((s) => s.playState)
   const currentTime = useAudioStore((s) => s.currentTime)
   const previewMode = useAudioStore((s) => s.previewMode)
-  const setPlayState = useAudioStore((s) => s.setPlayState)
   const setCurrentTime = useAudioStore((s) => s.setCurrentTime)
   const togglePreviewMode = useAudioStore((s) => s.togglePreviewMode)
 
-  // 使用全局共享的 AudioProcessor 单例（基于共享 AudioContext）
-  const processor = getAudioProcessor()
+  const duration = audioMeta?.duration ?? audioService.getDuration()
 
-  const duration = audioMeta?.duration ?? processor.getDuration()
-
-  // 播放自然结束回调
-  useEffect(() => {
-    processor.onEnded = () => {
-      setPlayState('stopped')
-      setCurrentTime(0)
-    }
-  }, [processor, setPlayState, setCurrentTime])
-
-  // 同步 audioBuffer 到 processor
+  // 同步音频缓冲到 audioService
   useEffect(() => {
     if (audioBuffer) {
-      processor.setBuffer(audioBuffer)
-      setCurrentTime(0)
-      setPlayState('stopped')
+      audioService.setBuffer(audioBuffer)
     }
-  }, [audioBuffer, processor, setCurrentTime, setPlayState])
+  }, [audioBuffer])
 
   // 同步处理参数（原始模式旁路所有处理）
   useEffect(() => {
-    const applied =
-      previewMode === 'original' ? buildBypassParams(params) : params
-    processor.updateParams(applied)
-  }, [params, previewMode, processor])
+    const applied = previewMode === 'original' ? buildBypassParams(params) : params
+    audioService.updateParams(applied)
+  }, [params, previewMode])
 
   // 实时回写 currentTime（仅播放时）
   useEffect(() => {
     if (playState !== 'playing') return
     let raf = 0
     const tick = () => {
-      setCurrentTime(processor.getCurrentTime())
+      setCurrentTime(audioService.getCurrentTime())
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [playState, processor, setCurrentTime])
+  }, [playState, setCurrentTime])
 
   const handlePlayPause = useCallback(() => {
     if (!audioBuffer) return
     if (playState === 'playing') {
-      processor.pause()
-      setPlayState('paused')
-      setCurrentTime(processor.getCurrentTime())
+      audioService.pause()
     } else {
-      // 浏览器自动暂停策略：播放前恢复 AudioContext
-      const ctx = getAudioContext()
-      if (ctx.state === 'suspended') {
-        void ctx.resume()
-      }
-      processor.play(currentTime)
-      setPlayState('playing')
+      audioService.play(currentTime)
     }
-  }, [
-    audioBuffer,
-    playState,
-    processor,
-    currentTime,
-    setPlayState,
-    setCurrentTime,
-  ])
+  }, [audioBuffer, playState, currentTime])
 
   const handleStop = useCallback(() => {
-    processor.stop()
-    setPlayState('stopped')
-    setCurrentTime(0)
-  }, [processor, setPlayState, setCurrentTime])
+    audioService.stop()
+  }, [])
 
   const handleSeek = useCallback(
     (time: number) => {
       if (!audioBuffer) return
       const target = Math.max(0, Math.min(time, duration))
-      processor.seek(target)
-      setCurrentTime(processor.getCurrentTime())
+      audioService.seek(target)
+      setCurrentTime(audioService.getCurrentTime())
     },
-    [audioBuffer, duration, processor, setCurrentTime],
+    [audioBuffer, duration, setCurrentTime],
   )
 
   const handleToggleMode = useCallback(() => {
     const wasPlaying = playState === 'playing'
-    const pos = processor.getCurrentTime()
+    const pos = audioService.getCurrentTime()
     if (wasPlaying) {
-      processor.stop()
+      audioService.stop()
     }
     const nextMode = previewMode === 'original' ? 'processed' : 'original'
-    // 无缝切换：立即应用下一模式参数再从当前位置续播
-    const nextParams =
-      nextMode === 'original' ? buildBypassParams(params) : params
-    processor.updateParams(nextParams)
+    const nextParams = nextMode === 'original' ? buildBypassParams(params) : params
+    audioService.updateParams(nextParams)
     togglePreviewMode()
     if (wasPlaying) {
-      processor.play(pos)
-      setPlayState('playing')
+      audioService.play(pos)
     }
-  }, [
-    playState,
-    previewMode,
-    params,
-    processor,
-    togglePreviewMode,
-    setPlayState,
-  ])
+  }, [playState, previewMode, params, togglePreviewMode])
 
   const hasBuffer = Boolean(audioBuffer)
   const isPlaying = playState === 'playing'
@@ -221,7 +162,7 @@ export default function PreviewPlayer() {
           </button>
         </div>
         <div className="text-xs tabular-nums text-bass-muted">
-          {formatTime(currentTime)} / {formatTime(duration)}
+          {formatSeconds(currentTime)} / {formatSeconds(duration)}
         </div>
       </div>
     </section>

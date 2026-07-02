@@ -10,20 +10,22 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
-import { validateAudioFile, getAudioMeta } from './decoder'
+import { validateAudioFile, getAudioMeta, verifyMagicBytes } from './decoder'
 import type { AudioFileMeta } from '../types'
 
 /** 构造仅含 name / size 的 File 桩，用于纯函数测试（无需真实数据）。 */
-function makeFileStub(name: string, size: number): File {
-  return { name, size } as unknown as File
+function makeFileStub(name: string, size: number, type = ''): File {
+  return { name, size, type } as unknown as File
 }
 
 /** 构造 AudioBuffer 桩，仅填充 getAudioMeta 所需字段。 */
-function makeBufferStub(opts: {
-  duration?: number
-  sampleRate?: number
-  numberOfChannels?: number
-} = {}): AudioBuffer {
+function makeBufferStub(
+  opts: {
+    duration?: number
+    sampleRate?: number
+    numberOfChannels?: number
+  } = {},
+): AudioBuffer {
   return {
     duration: opts.duration ?? 10,
     sampleRate: opts.sampleRate ?? 44100,
@@ -78,6 +80,146 @@ describe('validateAudioFile', () => {
     expect(result.valid).toBe(false)
     expect(result.error).toBe('不支持的音频格式，仅支持 mp3、wav、flac、ogg、m4a')
   })
+
+  // ---- MIME 类型校验（P3-2 新增）----
+
+  it('接受匹配扩展名的 MIME 类型', () => {
+    expect(validateAudioFile(makeFileStub('a.mp3', 1024, 'audio/mpeg')).valid).toBe(true)
+    expect(validateAudioFile(makeFileStub('b.wav', 1024, 'audio/wav')).valid).toBe(true)
+    expect(validateAudioFile(makeFileStub('c.flac', 1024, 'audio/flac')).valid).toBe(true)
+    expect(validateAudioFile(makeFileStub('d.ogg', 1024, 'audio/ogg')).valid).toBe(true)
+    expect(validateAudioFile(makeFileStub('e.m4a', 1024, 'audio/mp4')).valid).toBe(true)
+  })
+
+  it('接受空 MIME 类型（浏览器未提供时放行）', () => {
+    expect(validateAudioFile(makeFileStub('a.mp3', 1024, '')).valid).toBe(true)
+    expect(validateAudioFile(makeFileStub('b.wav', 1024)).valid).toBe(true)
+  })
+
+  it('拒绝与扩展名不匹配的 MIME 类型', () => {
+    const result = validateAudioFile(makeFileStub('a.mp3', 1024, 'text/plain'))
+    expect(result.valid).toBe(false)
+    expect(result.error).toContain('MIME')
+    expect(result.error).toContain('text/plain')
+  })
+
+  it('拒绝伪装成音频的可执行文件（MIME 不匹配）', () => {
+    const result = validateAudioFile(
+      makeFileStub('malicious.mp3', 1024, 'application/x-msdownload'),
+    )
+    expect(result.valid).toBe(false)
+  })
+})
+
+// ===================== verifyMagicBytes =====================
+
+/** 构造带 slice/arrayBuffer 的 File 桩，用于魔数校验测试。 */
+function makeFileWithHeader(name: string, header: number[]): File {
+  const bytes = new Uint8Array(Math.max(header.length, 12))
+  bytes.set(header, 0)
+  return {
+    name,
+    size: bytes.byteLength,
+    type: '',
+    slice: (start: number, end: number) => ({
+      arrayBuffer: () => Promise.resolve(bytes.slice(start, end).buffer),
+    }),
+  } as unknown as File
+}
+
+describe('verifyMagicBytes', () => {
+  it('接受正确的 MP3 文件头（ID3）', async () => {
+    // "ID3" + 填充
+    const file = makeFileWithHeader(
+      'a.mp3',
+      [0x49, 0x44, 0x33, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+    )
+    const result = await verifyMagicBytes(file)
+    expect(result.valid).toBe(true)
+  })
+
+  it('接受正确的 WAV 文件头（RIFF）', async () => {
+    // "RIFF"...."WAVE"
+    const file = makeFileWithHeader(
+      'a.wav',
+      [0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45],
+    )
+    const result = await verifyMagicBytes(file)
+    expect(result.valid).toBe(true)
+  })
+
+  it('接受正确的 FLAC 文件头（fLaC）', async () => {
+    const file = makeFileWithHeader(
+      'a.flac',
+      [0x66, 0x4c, 0x61, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+    )
+    const result = await verifyMagicBytes(file)
+    expect(result.valid).toBe(true)
+  })
+
+  it('接受正确的 OGG 文件头（OggS）', async () => {
+    const file = makeFileWithHeader(
+      'a.ogg',
+      [0x4f, 0x67, 0x67, 0x53, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+    )
+    const result = await verifyMagicBytes(file)
+    expect(result.valid).toBe(true)
+  })
+
+  it('接受正确的 M4A 文件头（offset=4 处 ftyp）', async () => {
+    // 前 4 字节为 size，offset=4 处为 "ftyp"
+    const file = makeFileWithHeader(
+      'a.m4a',
+      [0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70, 0x4d, 0x34, 0x41, 0x20],
+    )
+    const result = await verifyMagicBytes(file)
+    expect(result.valid).toBe(true)
+  })
+
+  it('拒绝伪装文件：txt 改名为 mp3', async () => {
+    // "hello world" 文本，非 ID3 头
+    const file = makeFileWithHeader(
+      'fake.mp3',
+      [0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x77, 0x6f, 0x72, 0x6c, 0x64, 0x00],
+    )
+    const result = await verifyMagicBytes(file)
+    expect(result.valid).toBe(false)
+    expect(result.error).toContain('不匹配')
+  })
+
+  it('拒绝伪装文件：exe 改名为 wav', async () => {
+    // MZ 头（Windows PE）
+    const file = makeFileWithHeader(
+      'trojan.wav',
+      [0x4d, 0x5a, 0x90, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+    )
+    const result = await verifyMagicBytes(file)
+    expect(result.valid).toBe(false)
+  })
+
+  it('拒绝过小文件（无法读取魔数）', async () => {
+    const tinyFile = {
+      name: 'tiny.mp3',
+      size: 3,
+      type: '',
+      slice: () => ({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(3)) }),
+    } as unknown as File
+    const result = await verifyMagicBytes(tinyFile)
+    expect(result.valid).toBe(false)
+    expect(result.error).toContain('损坏')
+  })
+
+  it('读取失败时返回错误', async () => {
+    const errorFile = {
+      name: 'error.mp3',
+      size: 100,
+      type: '',
+      slice: () => ({ arrayBuffer: () => Promise.reject(new Error('IO')) }),
+    } as unknown as File
+    const result = await verifyMagicBytes(errorFile)
+    expect(result.valid).toBe(false)
+    expect(result.error).toContain('读取')
+  })
 })
 
 // ===================== getAudioMeta =====================
@@ -85,7 +227,11 @@ describe('validateAudioFile', () => {
 describe('getAudioMeta', () => {
   it('正确提取元数据', () => {
     const file = makeFileStub('demo.flac', 2048)
-    const buffer = makeBufferStub({ duration: 12.5, sampleRate: 48000, numberOfChannels: 2 })
+    const buffer = makeBufferStub({
+      duration: 12.5,
+      sampleRate: 48000,
+      numberOfChannels: 2,
+    })
     const meta = getAudioMeta(file, buffer)
     const expected: AudioFileMeta = {
       fileName: 'demo.flac',
@@ -105,7 +251,11 @@ describe('getAudioMeta', () => {
 
   it('不同采样率与时长均能正确读取', () => {
     const file = makeFileStub('hi.m4a', 99999)
-    const buffer = makeBufferStub({ duration: 0.5, sampleRate: 96000, numberOfChannels: 2 })
+    const buffer = makeBufferStub({
+      duration: 0.5,
+      sampleRate: 96000,
+      numberOfChannels: 2,
+    })
     const meta = getAudioMeta(file, buffer)
     expect(meta.sampleRate).toBe(96000)
     expect(meta.duration).toBe(0.5)

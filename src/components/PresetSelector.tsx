@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { PRESET_METADATA } from '@/lib/presets'
+import { FOCUS_RING } from '@/lib/styles'
 import { useAudioStore } from '@/store/useAudioStore'
 import { cn } from '@/lib/utils'
 import { Tooltip } from '@/components/ui/Tooltip'
@@ -27,10 +28,6 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Mic,
   SlidersHorizontal,
 }
-
-/** 统一焦点样式。 */
-const FOCUS_RING =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bass-bg'
 
 export default function PresetSelector() {
   const presetType = useAudioStore((s) => s.presetType)

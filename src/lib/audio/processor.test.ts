@@ -186,12 +186,8 @@ describe('AudioProcessor', () => {
 
   describe('构造与处理链', () => {
     it('创建正确数量的节点：1 LowShelf + 5 EQ + 1 Compressor + 1 Gain', () => {
-      const lowShelfCount = ctx.biquadFilters.filter(
-        (b) => b.type === 'lowshelf',
-      ).length
-      const peakingCount = ctx.biquadFilters.filter(
-        (b) => b.type === 'peaking',
-      ).length
+      const lowShelfCount = ctx.biquadFilters.filter((b) => b.type === 'lowshelf').length
+      const peakingCount = ctx.biquadFilters.filter((b) => b.type === 'peaking').length
       expect(lowShelfCount).toBe(1)
       expect(peakingCount).toBe(5)
       expect(ctx.dynamicsCompressors).toHaveLength(1)
@@ -218,9 +214,7 @@ describe('AudioProcessor', () => {
       expect(lowShelf.frequency.value).toBe(
         DEFAULT_AUDIO_PROCESS_PARAMS.lowShelf.frequency,
       )
-      expect(lowShelf.gain.value).toBe(
-        DEFAULT_AUDIO_PROCESS_PARAMS.lowShelf.gain,
-      )
+      expect(lowShelf.gain.value).toBe(DEFAULT_AUDIO_PROCESS_PARAMS.lowShelf.gain)
     })
 
     it('buildProcessingChain 独立构建时同样创建 5 个 peaking 频段', () => {
@@ -262,9 +256,7 @@ describe('AudioProcessor', () => {
         gain: 5,
         q: 2,
       })
-      const peakingBands = ctx.biquadFilters.filter(
-        (b) => b.type === 'peaking',
-      )
+      const peakingBands = ctx.biquadFilters.filter((b) => b.type === 'peaking')
       expect(peakingBands[2].frequency.value).toBe(2000)
       expect(peakingBands[2].gain.value).toBe(5)
       expect(peakingBands[2].Q.value).toBe(2)
@@ -277,9 +269,7 @@ describe('AudioProcessor', () => {
         gain: -3,
         q: 1.5,
       })
-      const peakingBands = ctx.biquadFilters.filter(
-        (b) => b.type === 'peaking',
-      )
+      const peakingBands = ctx.biquadFilters.filter((b) => b.type === 'peaking')
       expect(peakingBands[1].gain.value).toBe(0)
       expect(peakingBands[4].gain.value).toBe(0)
     })
@@ -356,9 +346,7 @@ describe('AudioProcessor', () => {
       processor.updateParams(params)
 
       const lowShelf = ctx.biquadFilters[0]
-      const peakingBands = ctx.biquadFilters.filter(
-        (b) => b.type === 'peaking',
-      )
+      const peakingBands = ctx.biquadFilters.filter((b) => b.type === 'peaking')
       const compressor = ctx.dynamicsCompressors[0]
       const makeup = ctx.gainNodes[0]
 

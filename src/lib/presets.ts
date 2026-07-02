@@ -4,6 +4,7 @@
  * 为各具体预设（mild / moderate / severe / music / speech）提供对应的
  * AudioProcessParams，并提供预设应用、预设反查与元信息。
  */
+import { cloneParams } from './audio/params'
 import {
   DEFAULT_AUDIO_PROCESS_PARAMS,
   type AudioProcessParams,
@@ -26,7 +27,9 @@ const DEFAULT_Q = 1.0
  * 根据增益数组构建 5 段均衡器频段。
  * @param gains - 依次对应 100Hz / 300Hz / 1kHz / 3kHz / 8kHz 的增益（dB）
  */
-function buildEqualizer(gains: readonly [number, number, number, number, number]): EqualizerBand[] {
+function buildEqualizer(
+  gains: readonly [number, number, number, number, number],
+): EqualizerBand[] {
   return gains.map((gain, index) => ({
     id: index,
     frequency: EQ_FREQUENCIES[index],
@@ -111,18 +114,6 @@ export const PRESET_DEFINITIONS: Record<ConcretePreset, AudioProcessParams> = {
       makeupGain: 5,
     },
   },
-}
-
-/**
- * 深拷贝音频处理参数，避免外部修改污染内部常量。
- * 参数仅包含普通对象、数组与原始值，因此逐层展开即可安全克隆。
- */
-function cloneParams(params: AudioProcessParams): AudioProcessParams {
-  return {
-    lowShelf: { ...params.lowShelf },
-    equalizer: params.equalizer.map((band) => ({ ...band })),
-    compressor: { ...params.compressor },
-  }
 }
 
 /**

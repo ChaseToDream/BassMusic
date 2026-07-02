@@ -2,10 +2,12 @@ import {
   useCallback,
   useEffect,
   useRef,
+  useState,
   type KeyboardEvent,
   type MouseEvent,
 } from 'react'
 
+import { computePeaksAsync } from '@/lib/audio/workerClient'
 import { cn } from '@/lib/utils'
 
 export interface WaveformViewerProps {
@@ -22,58 +24,6 @@ const ACCENT = '#facc15'
 const MUTED = '#8a94a8'
 const MONO_HEIGHT = 160
 const STEREO_HEIGHT = 200
-
-/**
- * 峰值缓存：按 CSS 像素宽度聚合的每像素 min/max 采样值。
- * 每个通道存为一个 Float32Array，长度为 cssWidth*2，按 [min0,max0,min1,max1,...] 交错排列。
- */
-interface PeaksCache {
-  /** 缓存对应的音频缓冲引用，用于检测是否失效。 */
-  buffer: AudioBuffer | null
-  /** 缓存对应的 CSS 像素宽度，用于检测尺寸变化后失效。 */
-  cssWidth: number
-  /** 各通道的峰值数据（null 表示无音频缓冲）。 */
-  data: Float32Array[] | null
-}
-
-/**
- * 计算指定宽度下的波形峰值数据。
- *
- * 算法：按每像素一组聚合采样，计算该组 min/max。
- * 这是最耗时的部分（需遍历全部采样），因此结果会被缓存，
- * 仅在 buffer 引用或容器宽度变化时重新计算。
- */
-function computePeaks(
-  audioBuffer: AudioBuffer,
-  cssWidth: number,
-): Float32Array[] {
-  const channels = Math.min(2, audioBuffer.numberOfChannels)
-  const result: Float32Array[] = []
-  for (let ch = 0; ch < channels; ch++) {
-    const data = audioBuffer.getChannelData(ch)
-    const samplesPerPixel = Math.max(1, Math.floor(data.length / cssWidth))
-    const peaks = new Float32Array(cssWidth * 2)
-    for (let x = 0; x < cssWidth; x++) {
-      const start = x * samplesPerPixel
-      const end = Math.min(start + samplesPerPixel, data.length)
-      let min = 1
-      let max = -1
-      for (let i = start; i < end; i++) {
-        const v = data[i]
-        if (v < min) min = v
-        if (v > max) max = v
-      }
-      if (end <= start) {
-        min = 0
-        max = 0
-      }
-      peaks[x * 2] = min
-      peaks[x * 2 + 1] = max
-    }
-    result.push(peaks)
-  }
-  return result
-}
 
 /**
  * 基于缓存的峰值数据绘制波形到指定 canvas。
@@ -161,60 +111,88 @@ export default function WaveformViewer({
 }: WaveformViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  // 峰值缓存：buffer 引用或 cssWidth 变化时才重新计算
-  const peaksCacheRef = useRef<PeaksCache>({
-    buffer: null,
-    cssWidth: 0,
-    data: null,
-  })
 
-  /**
-   * 确保 peaks 缓存与当前 buffer / 容器宽度匹配，失效时重新计算。
-   * 返回当前有效的峰值数据（无音频时为 null）。
-   */
-  const ensurePeaks = useCallback(
-    (cssWidth: number): Float32Array[] | null => {
-      const cache = peaksCacheRef.current
-      if (
-        cache.buffer === audioBuffer &&
-        cache.cssWidth === cssWidth &&
-        (cache.data !== null || audioBuffer === null)
-      ) {
-        return cache.data
-      }
-      const data = audioBuffer ? computePeaks(audioBuffer, cssWidth) : null
-      peaksCacheRef.current = { buffer: audioBuffer, cssWidth, data }
-      return data
-    },
-    [audioBuffer],
-  )
+  // 峰值数据通过 Worker 异步计算，存入 state 触发重绘
+  const [peaksData, setPeaksData] = useState<Float32Array[] | null>(null)
+  // 记录当前峰值对应的 buffer 引用和 cssWidth，用于判断是否需要重新计算
+  const peaksBufferRef = useRef<AudioBuffer | null>(null)
+  const peaksWidthRef = useRef<number>(0)
 
-  const draw = useCallback(() => {
+  // audioBuffer 或容器宽度变化时，异步计算峰值
+  useEffect(() => {
+    if (!audioBuffer) {
+      setPeaksData(null)
+      peaksBufferRef.current = null
+      peaksWidthRef.current = 0
+      return
+    }
+
+    // 获取当前容器宽度
     const canvas = canvasRef.current
     if (!canvas) return
     const cssWidth = canvas.clientWidth
-    const peaks = ensurePeaks(cssWidth)
-    const duration = audioBuffer?.duration ?? 0
-    drawFromPeaks(canvas, peaks, currentTime, duration)
-  }, [audioBuffer, currentTime, ensurePeaks])
+    if (cssWidth <= 0) return
 
-  // buffer / currentTime 变化时重绘
+    // 缓存命中：buffer 引用与宽度均匹配，无需重新计算
+    if (peaksBufferRef.current === audioBuffer && peaksWidthRef.current === cssWidth) {
+      return
+    }
+
+    // 异步计算峰值（Worker 线程，不阻塞主线程）
+    peaksBufferRef.current = audioBuffer
+    peaksWidthRef.current = cssWidth
+    computePeaksAsync(audioBuffer, cssWidth).then((peaks) => {
+      // 检查回调是否仍然对应当前 buffer（避免 stale update）
+      if (peaksBufferRef.current === audioBuffer && peaksWidthRef.current === cssWidth) {
+        setPeaksData(peaks)
+      }
+    })
+  }, [audioBuffer])
+
+  // 绘制波形：从缓存峰值数据绘制，无采样遍历
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const duration = audioBuffer?.duration ?? 0
+    drawFromPeaks(canvas, peaksData, currentTime, duration)
+  }, [audioBuffer, currentTime, peaksData])
+
+  // draw 的 ref 版本，供 ResizeObserver 等不触发 state 变化的场景使用
+  const drawRef = useRef(draw)
+  drawRef.current = draw
+
+  // peaksData / currentTime 变化时重绘
   useEffect(() => {
     draw()
   }, [draw])
 
-  // 容器尺寸变化时重绘（用 ref 避免每次 draw 变化重新订阅）
-  const drawRef = useRef(draw)
-  drawRef.current = draw
+  // 容器尺寸变化时：宽度变了需异步重算峰值，否则仅重绘
   useEffect(() => {
     const container = containerRef.current
     if (!container || typeof ResizeObserver === 'undefined') return
     const ro = new ResizeObserver(() => {
-      drawRef.current()
+      const canvas = canvasRef.current
+      if (!canvas) return
+      const newWidth = canvas.clientWidth
+      if (audioBuffer && newWidth > 0 && newWidth !== peaksWidthRef.current) {
+        // 宽度变化 → 异步重算峰值
+        peaksWidthRef.current = newWidth
+        computePeaksAsync(audioBuffer, newWidth).then((peaks) => {
+          if (
+            peaksBufferRef.current === audioBuffer &&
+            peaksWidthRef.current === newWidth
+          ) {
+            setPeaksData(peaks)
+          }
+        })
+      } else {
+        // 仅重绘（currentTime 变化等）
+        drawRef.current()
+      }
     })
     ro.observe(container)
     return () => ro.disconnect()
-  }, [])
+  }, [audioBuffer])
 
   const seekFromClientX = useCallback(
     (clientX: number) => {

@@ -11,15 +11,12 @@
  */
 import { Gauge, RotateCcw } from 'lucide-react'
 import { DEFAULT_COMPRESSOR_PARAMS } from '@/lib/types'
+import { FOCUS_RING } from '@/lib/styles'
 import { useAudioStore } from '@/store/useAudioStore'
 import { cn } from '@/lib/utils'
 import { Panel } from '@/components/ui/Panel'
 import { Slider } from '@/components/ui/Slider'
 import { Switch } from '@/components/ui/Switch'
-
-/** 统一焦点样式。 */
-const FOCUS_RING =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bass-bg'
 
 /* ===== SVG 压缩曲线常量 ===== */
 /** 画布宽度。 */
@@ -138,7 +135,13 @@ export default function CompressorPanel() {
             strokeDasharray="2 3"
           />
           {/* 1:1 参考线 */}
-          <path d={refD} fill="none" stroke={COLOR_GRID} strokeWidth={1} strokeDasharray="3 3" />
+          <path
+            d={refD}
+            fill="none"
+            stroke={COLOR_GRID}
+            strokeWidth={1}
+            strokeDasharray="3 3"
+          />
           {/* 阈值竖线 */}
           <line
             x1={mapX(threshold)}
@@ -177,7 +180,13 @@ export default function CompressorPanel() {
             strokeWidth={1}
           />
           {/* 轴标签 */}
-          <text x={mapX(DB_MAX)} y={mapY(DB_MIN) + 16} textAnchor="middle" fill={COLOR_MUTED} fontSize={10}>
+          <text
+            x={mapX(DB_MAX)}
+            y={mapY(DB_MIN) + 16}
+            textAnchor="middle"
+            fill={COLOR_MUTED}
+            fontSize={10}
+          >
             输入 dB
           </text>
           <text
@@ -190,10 +199,22 @@ export default function CompressorPanel() {
           >
             输出 dB
           </text>
-          <text x={mapX(DB_MIN)} y={H - 8} textAnchor="middle" fill={COLOR_MUTED} fontSize={9}>
+          <text
+            x={mapX(DB_MIN)}
+            y={H - 8}
+            textAnchor="middle"
+            fill={COLOR_MUTED}
+            fontSize={9}
+          >
             {DB_MIN}
           </text>
-          <text x={mapX(DB_MAX)} y={H - 8} textAnchor="middle" fill={COLOR_MUTED} fontSize={9}>
+          <text
+            x={mapX(DB_MAX)}
+            y={H - 8}
+            textAnchor="middle"
+            fill={COLOR_MUTED}
+            fontSize={9}
+          >
             {DB_MAX}
           </text>
         </svg>

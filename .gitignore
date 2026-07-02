@@ -35,3 +35,6 @@ Thumbs.db
 # 其他
 .trae/
 docs/
+
+.workbuddy/
+coverage/

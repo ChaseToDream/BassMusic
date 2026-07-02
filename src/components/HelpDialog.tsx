@@ -8,11 +8,8 @@
 import { X } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 
+import { FOCUS_RING } from '@/lib/styles'
 import { useAudioStore } from '@/store/useAudioStore'
-
-/** 统一焦点样式。 */
-const FOCUS_RING =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bass-bg'
 
 /** 使用步骤条目：标题与说明。 */
 const STEPS: Array<{ title: string; desc: string }> = [
@@ -101,10 +98,7 @@ export default function HelpDialog() {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-4">
-          <h2
-            id="help-dialog-title"
-            className="text-lg font-semibold text-bass-text"
-          >
+          <h2 id="help-dialog-title" className="text-lg font-semibold text-bass-text">
             BassMusic 使用帮助
           </h2>
           <button

@@ -40,10 +40,7 @@ const EQUALIZER_BAND_COUNT = 5
  * 设置 LowShelf 滤波器参数。
  * 关闭时将增益置 0，等价于旁路（仍保留节点连接，避免重连爆音）。
  */
-function applyLowShelfParams(
-  lowShelf: BiquadFilterNode,
-  params: LowShelfParams,
-): void {
+function applyLowShelfParams(lowShelf: BiquadFilterNode, params: LowShelfParams): void {
   lowShelf.frequency.value = params.frequency
   lowShelf.gain.value = params.enabled ? params.gain : 0
 }
@@ -86,10 +83,7 @@ function applyCompressorParams(
  * 将一整套处理参数应用到已构建的处理链节点上。
  */
 function applyAllParams(
-  chain: Pick<
-    ProcessingChain,
-    'lowShelf' | 'bands' | 'compressor' | 'makeupGain'
-  >,
+  chain: Pick<ProcessingChain, 'lowShelf' | 'bands' | 'compressor' | 'makeupGain'>,
   params: AudioProcessParams,
 ): void {
   applyLowShelfParams(chain.lowShelf, params.lowShelf)

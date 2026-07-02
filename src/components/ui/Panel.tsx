@@ -45,14 +45,10 @@ export function Panel({
               </span>
             )}
             {title != null && (
-              <h2 className="text-base font-semibold text-bass-text">
-                {title}
-              </h2>
+              <h2 className="text-base font-semibold text-bass-text">{title}</h2>
             )}
           </div>
-          {actions != null && (
-            <div className="flex items-center gap-2">{actions}</div>
-          )}
+          {actions != null && <div className="flex items-center gap-2">{actions}</div>}
         </header>
       )}
       <div className={cn('flex-1 p-4', bodyClassName)}>{children}</div>

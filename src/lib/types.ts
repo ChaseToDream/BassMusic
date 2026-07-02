@@ -38,13 +38,7 @@ export interface CompressorParams {
 }
 
 /** 预设类型枚举 */
-export type PresetType =
-  | 'mild'
-  | 'moderate'
-  | 'severe'
-  | 'music'
-  | 'speech'
-  | 'custom'
+export type PresetType = 'mild' | 'moderate' | 'severe' | 'music' | 'speech' | 'custom'
 
 /** 完整的音频处理参数（一整套） */
 export interface AudioProcessParams {

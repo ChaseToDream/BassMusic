@@ -53,9 +53,7 @@ export default function ExportDialog() {
   useEffect(() => {
     if (!isOpen) return
     const done =
-      !exportProgress.isExporting &&
-      exportProgress.progress >= 1 &&
-      !exportProgress.error
+      !exportProgress.isExporting && exportProgress.progress >= 1 && !exportProgress.error
     if (!done) return
     const t = window.setTimeout(() => {
       setOpen(false)
@@ -95,8 +93,7 @@ export default function ExportDialog() {
   }
 
   const isExporting = exportProgress.isExporting
-  const isDone =
-    !isExporting && exportProgress.progress >= 1 && !exportProgress.error
+  const isDone = !isExporting && exportProgress.progress >= 1 && !exportProgress.error
   const percent = Math.round(exportProgress.progress * 100)
 
   return (
@@ -112,10 +109,7 @@ export default function ExportDialog() {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h2
-            id="export-dialog-title"
-            className="text-lg font-semibold text-bass-text"
-          >
+          <h2 id="export-dialog-title" className="text-lg font-semibold text-bass-text">
             导出音频
           </h2>
           <button
@@ -132,9 +126,7 @@ export default function ExportDialog() {
         <form className="mt-4 space-y-4" onSubmit={handleExport}>
           {/* 格式选择 */}
           <fieldset>
-            <legend className="text-sm font-medium text-bass-text">
-              导出格式
-            </legend>
+            <legend className="text-sm font-medium text-bass-text">导出格式</legend>
             <div className="mt-2 grid grid-cols-2 gap-2">
               {FORMATS.map((f) => (
                 <label
@@ -164,9 +156,7 @@ export default function ExportDialog() {
           {/* MP3 比特率 */}
           {format === 'mp3' && (
             <fieldset>
-              <legend className="text-sm font-medium text-bass-text">
-                MP3 比特率
-              </legend>
+              <legend className="text-sm font-medium text-bass-text">MP3 比特率</legend>
               <div className="mt-2 grid grid-cols-3 gap-2">
                 {BITRATES.map((b) => (
                   <label
@@ -204,9 +194,7 @@ export default function ExportDialog() {
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs text-bass-muted">
                 <span className="inline-flex items-center gap-1">
-                  {isExporting && (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  )}
+                  {isExporting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   {isDone ? '导出完成' : isExporting ? '导出中…' : '已导出'}
                 </span>
                 <span className="tabular-nums">{percent}%</span>

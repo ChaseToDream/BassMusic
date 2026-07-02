@@ -39,7 +39,9 @@ describe('PRESET_DEFINITIONS', () => {
     for (const preset of CONCRETE_PRESETS) {
       const params = PRESET_DEFINITIONS[preset as Exclude<PresetType, 'custom'>]
       expect(params.equalizer).toHaveLength(5)
-      expect(params.equalizer.map((b) => b.gain)).toEqual(EXPECTED_EQ_GAINS[preset as Exclude<PresetType, 'custom'>])
+      expect(params.equalizer.map((b) => b.gain)).toEqual(
+        EXPECTED_EQ_GAINS[preset as Exclude<PresetType, 'custom'>],
+      )
     }
   })
 })
@@ -92,7 +94,9 @@ describe('applyPreset', () => {
     const second = applyPreset('moderate')
     expect(second.lowShelf.gain).toBe(PRESET_DEFINITIONS.moderate.lowShelf.gain)
     expect(second.equalizer[0].gain).toBe(PRESET_DEFINITIONS.moderate.equalizer[0].gain)
-    expect(second.compressor.threshold).toBe(PRESET_DEFINITIONS.moderate.compressor.threshold)
+    expect(second.compressor.threshold).toBe(
+      PRESET_DEFINITIONS.moderate.compressor.threshold,
+    )
 
     // 常量未被污染
     expect(PRESET_DEFINITIONS.moderate.lowShelf.gain).not.toBe(999)
@@ -100,7 +104,7 @@ describe('applyPreset', () => {
     expect(PRESET_DEFINITIONS.moderate.compressor.threshold).not.toBe(999)
   })
 
-  it("custom 返回值同样为深拷贝，修改不影响默认常量", () => {
+  it('custom 返回值同样为深拷贝，修改不影响默认常量', () => {
     const first = applyPreset('custom')
     first.lowShelf.gain = 999
     first.equalizer[0].gain = 999
